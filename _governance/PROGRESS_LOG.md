@@ -2,6 +2,22 @@
 
 > 倒序排列：最新进度在最顶部。
 
+## 2026-06-19 | P6 Git 初始化 + 首次提交 — 闭环
+- **状态**：🟢完成
+- **产出/动作**：
+  - `git init` ✅ — 初始化 Git 仓库（`D:\gaokao-skill`）
+  - `git config user.name/email` ✅ — 从 GitHub CLI `gh auth status` 读取已登录账号 `lyu564971-sketch`，配置本地身份
+  - `.gitignore` ✅ — 已有完整规则（node_modules/.next/.env/logs/DS_Store 等）
+  - `git add -A && git commit` ✅ — 42 个文件，6784 行，commit `76a67e7`
+  - Commit 消息：`feat: P0-P5 全阶段完成 — 现实主义高考志愿诊断终端 MVP`
+- **关键决策/发现**：
+  - 用户 GitHub 已登录（`gh auth status` → `lyu564971-sketch`），直接读取身份无需手动配置
+  - 本地 `git config`（非 `--global`），仅对本仓库生效
+  - 首次提交包含完整 P0-P5 全部产物，可作为 Vercel 部署的基础 commit
+- **下一步**：可推送到 GitHub 远程仓库、创建 Vercel 部署、或本地联调测试。
+
+---
+
 ## 2026-06-19 | P5 打磨（禁用词闭环 / 移动端响应式 / API 加固 / 同步）— 闭环
 - **状态**：🟢完成
 - **产出/动作**：
