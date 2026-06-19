@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: gaokao-skill
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LLM_PROVIDER
+        sync: false
+      - key: LLM_BASE_URL
+        sync: false
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        sync: false
+      - key: DATA_PROVIDER
+        value: zai-websearch
+      - key: DATA_SEARCH_BACKEND
+        value: fallback
