@@ -21,7 +21,9 @@ import type { StudentProfile } from '@/lib/research/protocol';
 // Vercel 默认 10s 超时会杀连接。用 nodejs runtime（Edge 不支持部分 Node API）
 // + maxDuration=60 覆盖完整诊断流程。
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+// Vercel 免费版 Hobby plan 上限 10s，Pro 版 60s。
+// 这里设 10 兼容免费版；升级 Pro 后改为 60。
+export const maxDuration = 10;
 
 /** POST handler: 接收消息，返回 SSE 流 */
 export async function POST(req: NextRequest) {
