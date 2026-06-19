@@ -1,0 +1,32 @@
+{
+  "name": "gaokao-skill",
+  "version": "1.0.0",
+  "description": "现实主义高考志愿分析师 · Web 产品",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
+    "start": "next start --webpack",
+    "lint": "next lint",
+    "cli:demo": "node --experimental-strip-types cli/run.ts --demo",
+    "cli": "node --experimental-strip-types cli/run.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "next": "^16.2.9",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.1",
+    "@types/node": "^25.9.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^4.3.1",
+    "typescript": "^6.0.3"
+  }
+}

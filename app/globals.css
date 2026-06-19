@@ -1,0 +1,155 @@
+@import "tailwindcss";
+
+/* ============================================
+   数据终端美学 · 设计系统
+   见 ARCHITECTURE.md §5
+   反消费级圆角渐变，走 Bloomberg Terminal × Linear 克制路线
+   ============================================ */
+
+@theme {
+  /* 色彩系统：深色为主 + 琥珀强调（警示感，契合"风险警告"主题） */
+  --color-bg: #0a0a0a;
+  --color-bg-elevated: #141414;
+  --color-bg-card: #1a1a1a;
+  --color-border: #2a2a2a;
+  --color-border-bright: #3a3a3a;
+
+  --color-fg: #e8e8e8;
+  --color-fg-dim: #8a8a8a;
+  --color-fg-faint: #5a5a5a;
+
+  /* 琥珀强调色 */
+  --color-accent: #f59e0b;
+  --color-accent-dim: #b8760a;
+
+  /* 可信度徽章色 */
+  --color-cred-a: #22c55e;
+  --color-cred-b: #eab308;
+  --color-cred-c: #f97316;
+  --color-cred-none: #5a5a5a;
+
+  /* 危险/避坑 */
+  --color-danger: #ef4444;
+
+  /* 字体 */
+  --font-sans: "Source Han Sans CN", "HarmonyOS Sans SC", "PingFang SC",
+    "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", "Fira Code", ui-monospace,
+    monospace;
+}
+
+html {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-height: 100vh;
+}
+
+/* 数字等宽（专业感微观基础） */
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 扫描线效果（终端质感，极淡） */
+.scanline::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0,
+    transparent 2px,
+    rgba(255, 255, 255, 0.012) 3px,
+    rgba(255, 255, 255, 0.012) 3px
+  );
+  z-index: 1;
+}
+
+/* 滚动条（终端风） */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-bright);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-fg-faint);
+}
+
+/* 文本选中色 */
+::selection {
+  background: var(--color-accent-dim);
+  color: var(--color-bg);
+}
+
+/* ============================================
+   打印 / 导出 PDF 样式（P4）
+   触发：ExportBar 的「🖨 打印 / PDF」按钮 → window.print()
+   策略：白底黑字、隐藏 UI chrome（顶栏/输入区/槽位面板/导出栏）、
+        三段卡片转浅边白底、来源清单保留、卡片不跨页断裂。
+   ============================================ */
+@media print {
+  /* 全局转白底黑字，关闭扫描线终端效果 */
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .scanline::before {
+    display: none !important;
+  }
+
+  /* 隐藏所有标记为 no-print 的 UI chrome */
+  .no-print {
+    display: none !important;
+  }
+
+  /* 只显示报告区：隐藏所有元素，再让报告相关区域可见 */
+  body * {
+    visibility: hidden;
+  }
+  /* 报告卡片、来源面板、导出栏标记的元素可见 */
+  .section-card,
+  .section-card *,
+  .print-visible,
+  .print-visible * {
+    visibility: visible;
+  }
+  /* 来源清单在 screen 折叠时用 Tailwind hidden 隐藏；打印强制显示 */
+  .print-force-show {
+    display: block !important;
+  }
+  /* 报告卡片占满页面起点 */
+  .section-card {
+    position: relative;
+    border: 1px solid #ccc !important;
+    background: #fff !important;
+    color: #000 !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-bottom: 12px;
+  }
+  /* 卡片左侧色条在打印里转深灰，避免彩色背景浪费墨 */
+  .section-card > div:first-child {
+    background: #333 !important;
+  }
+  /* 卡片内文字、标题转黑 */
+  .section-card,
+  .section-card span,
+  .section-card strong,
+  .section-card code {
+    color: #000 !important;
+    background: transparent !important;
+    border-color: #999 !important;
+  }
+}
