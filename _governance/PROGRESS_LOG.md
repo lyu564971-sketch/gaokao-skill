@@ -2,6 +2,25 @@
 
 > 倒序排列：最新进度在最顶部。
 
+## 2026-06-19 23:30 | P7 部署上线（GitHub 推送 + Render.com 配置 + 本地 prod 验证）— 闭环
+- **状态**：🟢完成（部署配置与本地验证完成；Render 线上部署待用户一键触发）
+- **产出/动作**：
+  - GitHub 仓库创建 ✅ — `lyu564971-sketch/gaokao-skill`，2 commits 推送成功（分支 master→main 重命名）
+  - BUG-008 修复 ✅ — `package.json` start 脚本去掉无效的 `--webpack`（`next start` 不接受此标志）
+  - `app/api/chat/route.ts` maxDuration 60→10 ✅ — 兼容 Vercel 免费版 10s 上限（虽最终改用 Render，仍保留以防未来回 Vercel）
+  - `vercel.json` ✅ — 显式声明 framework/buildCommand（备用，Vercel 路径）
+  - `render.yaml` ✅ — Render Blueprint（web service + free plan + envVars 占位，`sync: false` 的 LLM_API_KEY 等需在 Dashboard 填）
+  - 本地 prod 全链路验证 ✅ — `npm run build && npm run start`，6 路由断言：`/` 200、`/chat` 200、`/skill` 200、`/api/chat` GET 405、`/api/chat` POST 空 400、首页 title 正确
+  - BUG-008 已立条并闭环（BUG_AUDIT.md）
+- **关键决策/发现**：
+  - **Vercel 方案放弃**：用户无境外手机号无法注册 Vercel 账号（CLI OAuth 登录在国内 TLS 握手不稳定也加剧了问题）
+  - **Cloudflare Pages 方案放弃**：Next.js 16 全栈需走 Cloudflare Workers + OpenNext 适配，API 路由强制 `runtime='edge'`，还有 25MB Worker 包体限制，改造成本高
+  - **Render.com 选定**：① 免费版 750h/月够用 ② 不需信用卡 ③ 支持 GitHub 登录（用户已有）④ 直接以 Node.js 服务器运行 Next.js，零代码改造，与现有 `nodejs` runtime 完美兼容
+  - BUG-008 是 BUG-005 修复的过度推广（start 不该加 `--webpack`），已纠正
+- **下一步**：用户在 Render Dashboard 一键部署（Blueprint 自动读 render.yaml），填入 LLM 环境变量后即可获得 `*.onrender.com` 公网地址。
+
+---
+
 ## 2026-06-19 | P6 Git 初始化 + 首次提交 — 闭环
 - **状态**：🟢完成
 - **产出/动作**：

@@ -5,7 +5,16 @@
 
 ---
 
-## BUG-007 | web-search.ts:106 JSON 对象字面量 query 键重复
+## BUG-008 | `next start --webpack` 未知选项，生产启动失败
+- **状态**：✅已闭环
+- **现象**：生产启动 `npm run start` 报 `error: unknown option '--webpack'`，进程退出码 1，服务无法启动。
+- **触发条件**：任何执行 `next start --webpack` 的场景（本地 prod 验证、Render/Vercel 等任何 PaaS 启动）。
+- **根因**：BUG-005 修复时把 `--webpack` 加到 dev/build/start 三条脚本，但 `next start` 子命令在 Next 16 **不接受** `--webpack` 标志（只有 `next dev` 和 `next build` 接受，因为 start 只是运行已构建产物，不涉及 SWC 编译）。这是对 BUG-005 修复范围的过度推广。
+- **修复方案**：`package.json` 的 `start` 脚本从 `next start --webpack` 改回 `next start`。dev/build 保持 `--webpack` 不变（这两个命令确实需要）。
+- **防再发措施**：
+  1. `EXECUTION_RULES.md` 增补：每条 npm script 的标志必须独立验证，不因 A 命令需要就批量套用到相关命令；
+  2. 本地 `npm run build && npm run start` 全链路验证纳入部署前检查清单。
+- **验证方式**：`PORT=3210 npm run start` 启动后，`/`、`/chat`、`/skill` 均 HTTP 200；`/api/chat` GET 返回 405、POST 空体返回 400。6 个断言全部通过。✅
 - **状态**：✅已闭环
 - **现象**：`lib/providers/data/web-search.ts:106` 的 `JSON.stringify({ query, max_results: maxResults, query: query })` 中 `query` 键出现两次。JS 对象字面量中后者覆盖前者，功能上等价于只有一份 `query`，不会报错，但属于明显的代码笔误。
 - **触发条件**：任何通过 httpSearch 后端发起的搜索请求（auto/http 后端走此路径）。
