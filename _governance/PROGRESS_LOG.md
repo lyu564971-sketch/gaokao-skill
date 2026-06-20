@@ -2,6 +2,70 @@
 
 > 倒序排列：最新进度在最顶部。
 
+## 2026-06-20 20:25 | P9 Render 构建反复失败排查 — 🔴暂停（四次假设证伪 + 浏览器自动化受阻，转交用户取日志）
+
+- **状态**：🔴暂停 — 代码/依赖/Node 版本全部排除，唯一出路是 Dashboard 真实日志；浏览器自动化取日志遇多重障碍，转交用户手动复制日志文本
+- **背景**：新服务 `srv-d8r2md6gvqtc73ef25fg` 创建后，从首个 commit 起连续 `build_failed`。本条诚实记录完整排查过程，**含四次错误假设 + 一次失败的工具化尝试**，作为方法论教训存档。
+
+### 构建耗时铁证（唯一可靠的诊断数据）
+| commit | 假设 | 结果 | 耗时 | buildId |
+|---|---|---|---|---|
+| `3156919` | — | fail | 33s | — |
+| `46581a6` | Node 20→22 | fail | 23s | — |
+| `b66066b` | 去掉 --webpack | fail | 26s | — |
+| `e900ff2` | 修 @/ 路径别名 + 相对路径 | fail | **113s** | — |
+| `2b0af3f` | 加 NODE_VERSION=22 | fail | **31s** | `bld-d8r7jmrrjlhs73e0tv1g` |
+| `e3b83b9` | NODE_VERSION 改 24（对齐本地）| fail | **27s** | `dep-d8r83gjrjlhs73e167k0` |
+
+> 规律：除了 e900ff2 跑到 113s（进入 build 阶段才挂），其余 5 次全部 23-33s ≈ install 阶段挂。**关键反常**：e900ff2 之后的 2b0af3f/e3b83b9 显式设 NODE_VERSION，耗时反而暴跌回 27-31s——设置环境变量本身可能改变了 Render 的构建流程。
+
+### 四次被证伪的假设（方法论教训）
+1. **`--webpack` 导致 SWC 崩溃**（b66066b）→ 证伪：去掉后仍 26s fail
+2. **`@/*` 路径别名 + 相对路径写错**（e900ff2）→ 证伪：本地 `npm run build` 通过，但 Render 113s fail；**本地通过 ≠ 线上通过**
+3. **Node 版本不对，缺 NODE_VERSION 变量**（2b0af3f）→ 证伪：设 NODE_VERSION=22 后仍 31s fail
+4. **Node 版本不对，22→24 对齐本地**（e3b83b9）→ 证伪：Node 24 下仍 27s fail。**至此 Node 版本变量彻底排除**
+
+### 已确证的事实（排除项，均为铁证）
+- ✅ 本地 `npm run build` 始终通过（6 路由正常）→ **代码层面无问题**
+- ✅ 纯净临时目录 `git archive HEAD` + `npm ci` + `next build` 全程成功（Node 24，42s+6.9s）→ **不是 lockfile/依赖问题**
+- ✅ git 跟踪文件 = 磁盘文件，无缺失（不是漏提交文件）
+- ✅ package.json 与 package-lock.json 同步（lockfileVersion 3，依赖匹配）
+- ✅ postcss/tailwind 配置正常（`@tailwindcss/postcss` plugin，`@import "tailwindcss"`）
+- ✅ render.yaml buildCommand = `npm install && npm run build`，正常
+- ❌ **Render API 不暴露构建日志**：`/events`（只有状态码）、`/deploys/{id}/logs`、`/services/{id}/logs` 端点均 404；deploy 详情仅 `status`+`reason.buildFailed.id="Exited with status 1"`，无 error/message 原文
+
+### 浏览器自动化取日志受阻（P9 第二阶段，失败的工具化尝试）
+为绕开"API 不给日志"，尝试用 Playwright 自动化登录 Dashboard 抓日志，遇**连续障碍**：
+1. ❌ Chrome 默认 user-data-dir 不能开 `--remote-debugging-port`（Chrome 安全限制："DevTools remote debugging requires a non-default data directory"）
+2. ❌ 复制 Default profile 到独立目录 → Cookies 不在根目录，在 `Network/Cookies` 子目录（Chrome 新版结构）
+3. ❌ `strings` 扫描所有浏览器所有 profile 的 Cookies → **render.com 明文记录数 = 0**（Render 登录态可能是加密 cookie 或 localStorage，`strings` 抓不到）
+4. ❌ Playwright Python 需要的 chromium-1208 与系统已有的 chromium-1223（npm 全局 playwright）版本不匹配 → `playwright install chromium` 下载 172MB 到 50% 超时
+5. ⚠ 改用 `channel="chrome"` 走系统 Chrome 成功启动，但打开 Render 跳到 `/login` 页 → **Playwright 的 Chrome 无登录态，需用户重新登录**
+
+> 教训：浏览器自动化要复用真实登录态，障碍比预期大（Chrome 调试端口限制 + cookie 加密 + localStorage）。每一步都是新障碍，违反"失败按重试链处理，不要瞎撞"纪律，应及早止损转交用户。
+
+### 产出/动作（本次完成，虽未解决问题）
+- `render.yaml` NODE_VERSION 22→24（commit `e3b83b9`，对齐本地验证环境）✅
+- API 同步设 `NODE_VERSION=24`（HTTP 200）✅
+- 排除了 Node 版本作为根因（22 和 24 都失败）✅
+- 排除了代码/lockfile/配置问题（本地 + 纯净目录双验证）✅
+- 清理误建的 `nul` 文件（之前用 cmd 语法 `2>nul` 在 bash 里误创建）✅
+- Playwright 探针脚本 `_tooling/probe_render.py`（用系统 Chrome，确认 Render 需登录）✅
+
+### 当前阻塞点 / 下一步
+**本地无法复现失败 + API 不给报错原文 + 浏览器自动化取日志受阻** = 无法定向修复。已用 6 次失败构建，继续盲推只会浪费配额，违反 EXECUTION_RULES verification-before-completion。
+
+**转交用户的唯一动作**：在已登录的浏览器打开
+`https://dashboard.render.com/web/srv-d8r2md6gvqtc73ef25fg/deploys/dep-d8r83gjrjlhs73e167k0`
+找到 **Logs** 面板，选中失败时间点（~12:04）的报错行（含 `Error`/`ERR!`/`Module not found`/`ELIFECYCLE`），**复制文本**（非截图，避免 OCR 丢字符）发回。拿到真实报错后即可定向修复。
+
+### 方法论教训（拟写入 EXECUTION_RULES）
+1. **远程构建失败，第一动作是获取真实日志**，不要在"本地能过"前提下连续猜测推送——本次连错 4 次假设，浪费 6 次部署
+2. **耗时数据是 API 能给的少数可靠信号**：install 阶段挂（~25s）vs build 阶段挂（~113s）应优先据此缩小范围
+3. **浏览器自动化复用真实登录态障碍大**：Chrome 调试端口拒绝默认目录、cookie 加密、localStorage——成本高于让用户复制一段文本，及早止损
+
+---
+
 ## 2026-06-20 | P8 部署约束记录（API Key / 模型限制 / Render 操作审计）
 - **状态**：🟢完成
 - **产出/动作**：
