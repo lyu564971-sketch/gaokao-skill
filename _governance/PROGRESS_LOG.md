@@ -2,6 +2,36 @@
 
 > 倒序排列：最新进度在最顶部。
 
+## 2026-06-20 | P8 部署约束记录（API Key / 模型限制 / Render 操作审计）
+- **状态**：🟢完成
+- **产出/动作**：
+  - `DECISIONS.md` 新增 ADR-008（API Key 使用约束 + 模型限制）✅
+  - `EXECUTION_RULES.md` 新增 §8 运营约束（LLM 模型白名单 / API Key 保管 / 部署操作权限）✅
+  - `PROGRESS_LOG.md` 本条——记录完整约束上下文 ✅
+- **关键决策/发现**：
+  - **LLM API Key**：`b877746c417c496c8f44e574cd20eb01.oU9wpqAwq1iWRTeZ`（智谱 GLM 平台）
+  - **LLM_BASE_URL**：`https://open.bigmodel.cn/api/paas/v4`（OpenAI 兼容接口）
+  - **LLM_PROVIDER**：`glm`
+  - **模型约束**：**只允许使用免费模型**。当前白名单：`glm-4.5-air`；禁止使用 `glm-4.6`、`glm-4-plus`、`glm-4-flash` 等任何付费模型
+  - **Render 部署状态**：旧服务 `srv-d8qn2vvavr4c73diseng` 已删除（连续 3 次 build_failed，~20s 快速失败）；API 直接创建新服务遇到 402（需绑卡验证），需用户通过 Dashboard Blueprint 链接手动创建
+  - **环境变量**已通过 API 配置在旧服务上（随服务删除丢失），新服务创建后需重新配置
+  - **本地构建验证**：`npm run build` ✅ 成功（6 路由正常），代码无问题，失败在 Render 环境侧
+- **API Key 完整信息**（供新服务配置使用）：
+
+  | Key | Value |
+  |---|---|
+  | `LLM_PROVIDER` | `glm` |
+  | `LLM_BASE_URL` | `https://open.bigmodel.cn/api/paas/v4` |
+  | `LLM_API_KEY` | `b877746c417c496c8f44e574cd20eb01.oU9wpqAwq1iWRTeZ` |
+  | `LLM_MODEL` | `glm-4.5-air` |
+  | `DATA_PROVIDER` | `zai-websearch` |
+  | `DATA_SEARCH_BACKEND` | `fallback` |
+  | `NODE_ENV` | `production` |
+
+- **下一步**：用户在浏览器打开 `https://dashboard.render.com/blueprint/new?repo=https://github.com/lyu564971-sketch/gaokao-skill.git` 创建服务后，用 API 配置环境变量并触发部署。
+
+---
+
 ## 2026-06-19 23:30 | P7 部署上线（GitHub 推送 + Render.com 配置 + 本地 prod 验证）— 闭环
 - **状态**：🟢完成（部署配置与本地验证完成；Render 线上部署待用户一键触发）
 - **产出/动作**：

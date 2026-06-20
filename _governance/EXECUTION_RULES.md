@@ -119,3 +119,37 @@
 - 严格按 P0a → P0b → P0c → P1... 顺序
 - 前一阶段未通过验收，不进入下一阶段（除非有明确理由并在 `DECISIONS.md` 记录）
 - 优先验证最不确定的环节（所以 P0c CLI 原型在 P1 前端之前）
+
+---
+
+## 9. 运营约束（LLM 模型 / API Key / 部署权限）
+
+> 本节为用户硬约束，任何操作不得违反。详见 ADR-008。
+
+### 9.1 LLM 模型白名单
+
+| 状态 | 模型 ID | 说明 |
+|------|---------|------|
+| ✅ 允许 | `glm-4.5-air` | 主力模型（默认） |
+| ✅ 允许 | `glm-4-flash` | 备选（更快速，质量略低） |
+| ❌ 禁止 | `glm-4.6` | 付费模型 |
+| ❌ 禁止 | `glm-4-plus` | 付费模型 |
+| ❌ 禁止 | `glm-4-long` | 付费模型 |
+| ❌ 禁止 | `glm-4-alltools` | 付费模型 |
+| ❌ 禁止 | 其他所有未列在白名单的模型 | 除非用户明确授权 |
+
+**规则**：切换模型前必须对照此表检查。白名单更新需在本节同步修改。
+
+### 9.2 API Key 保管
+
+- 智谱 API Key：存储于 Render 环境变量 `LLM_API_KEY`，禁止硬编码到源码
+- 真实 Key 禁止写入 `.env.example`（占位值：`your-api-key-here`）
+- 真实 Key 禁止提交到 Git（`.gitignore` 含 `.env` 规则）
+- 完整 Key 值仅在 `_governance/PROGRESS_LOG.md` P8 条目和 Render Dashboard 中可查
+
+### 9.3 部署操作权限
+
+- Render 服务创建：通过 Dashboard Blueprint 链接或 API（API 需绑卡验证）
+- Render 环境变量：通过 Render API `PUT /v1/services/{id}/env-vars/{key}` 管理
+- Render 部署触发：通过 Render API `POST /v1/services/{id}/deploys` 或 Git push（autoDeploy）
+- 服务删除/重建：需用户确认（不可逆操作）
