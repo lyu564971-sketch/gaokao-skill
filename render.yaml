@@ -7,7 +7,7 @@ services:
     startCommand: npm run start
     envVars:
       - key: NODE_VERSION
-        value: "22"
+        value: "24"
       - key: NODE_ENV
         value: production
       - key: LLM_PROVIDER
