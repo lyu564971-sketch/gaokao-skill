@@ -10,11 +10,11 @@
  */
 
 import { NextRequest } from 'next/server';
-import { getLLMProvider, getDataProvider } from '@/lib/providers/registry';
-import { AgenticProtocol } from '@/lib/research/protocol';
-import { loadSkillPrompt } from '@/lib/skill/loader';
-import { filterTaboo } from '@/lib/research/taboo-filter';
-import type { StudentProfile } from '@/lib/research/protocol';
+import { getLLMProvider, getDataProvider } from '../../../lib/providers/registry';
+import { AgenticProtocol } from '../../../lib/research/protocol';
+import { loadSkillPrompt } from '../../../lib/skill/loader';
+import { filterTaboo } from '../../../lib/research/taboo-filter';
+import type { StudentProfile } from '../../../lib/research/protocol';
 
 // P3b：Vercel Runtime 声明。
 // SSE 流式诊断含 9 并行 WebSearch + LLM 流式，总耗时可能 30-50s，
