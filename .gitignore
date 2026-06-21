@@ -1,35 +1,29 @@
-# dependencies
-node_modules/
-.pnp
-.pnp.*
-
-# next.js
-.next/
-out/
-build/
-dist/
-
-# env
+# API 密钥配置文件（包含真实 key，禁止提交）
 .env
 .env.local
 .env*.local
 
-# logs
-npm-install*.log
-*.log
+# Python
+.next/
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# 开发备份
+backup/
 
-# os
+# 视频制作临时文件
+xuefeng-promo-video/
+demo-thumb.gif
+demo-video.mp4
+
+# 缓存数据库（运行时生成）
+gaokao_cache.db
+
+# 系统文件
 .DS_Store
 Thumbs.db
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts.bak
-
-# temp
-_fix-npm.mjs
+admission_data.db
+*.db
+build_log.txt
