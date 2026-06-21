@@ -1,221 +1,110 @@
-/**
- * TerminalChat 组件（lib/chat/terminal-chat.tsx）
- *
- * 深色终端美学对话 UI：
- * - 消息列表（用户/assistant 分区，assistant 支持流式渲染）
- * - 输入框 + 发送按钮
- * - 槽位采集面板（左侧或顶部，显示已收集/缺失状态）
- * - 阶段进度指示器
- * - 来源折叠面板
- */
-
 'use client';
 
-import { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { useChatStream } from './use-chat-stream';
-import type { SlotState, ChatMessage, SourceItem } from './types';
-import { formatMarkdown } from './format';
-import { SectionReport, ExportBar } from './section-report';
+import { useEffect, useRef, useState } from "react";
+import { useChatStream } from "./use-chat-stream";
+import type { ChatConversation, ChatMessage, ChatMode, SourceItem } from "./types";
+import { uid } from "./types";
 
-// ============ 阶段标签映射 ============
-const PHASE_LABELS: Record<string, { label: string; icon: string }> = {
-  slot: { label: '槽位采集', icon: '📡' },
-  classify: { label: '问题分类', icon: '🔍' },
-  research: { label: '联网核查', icon: '🌐' },
-  checkpoint: { label: '质量门控', icon: '🔒' },
-  answer: { label: '生成报告', icon: '📝' },
+const STORAGE_KEY = "gaokao-skill.conversations.v2";
+const ACTIVE_KEY = "gaokao-skill.activeConversation.v2";
+const THEME_KEY = "gaokao-skill.theme.v2";
+
+const MODE_COPY: Record<
+  ChatMode,
+  {
+    label: string;
+    eyebrow: string;
+    title: string;
+    promise: string;
+    placeholder: string;
+    persona: string;
+  }
+> = {
+  apply: {
+    label: "报考",
+    eyebrow: "先查数据，再给判断",
+    title: "现实主义志愿诊断",
+    promise: "把省份、分数、位次、选科、家庭条件说清楚，我会先补槽位，再查就业和录取线。",
+    placeholder: "输入你的省份、分数、位次、选科和想法...",
+    persona: "稳准狠",
+  },
+  roast: {
+    label: "吐槽",
+    eyebrow: "犀利一点，但不胡说",
+    title: "志愿填报冷水机",
+    promise: "适合快速拆幻想：我会保留事实边界，只把风险说得更直白。",
+    placeholder: "把你的方案丢过来，我帮你挑风险...",
+    persona: "别上头",
+  },
 };
 
-// ============ 可信度徽章 ============
-function CredBadge({ level }: { level: string }) {
-  const colorMap: Record<string, string> = {
-    A: 'bg-[var(--color-cred-a)]',
-    B: 'bg-[var(--color-cred-b)]',
-    C: 'bg-[var(--color-cred-c)]',
-    NONE: 'border border-dashed border-[var(--color-cred-none)]',
+const QUICK_PROMPTS = [
+  "河南物化生，580分，位次大概6万，普通家庭，想稳就业，怎么报？",
+  "我想学计算机，但分数只够普通二本，有没有更现实的替代方案？",
+  "女生，想进体制内，师范、法学、护理哪个更稳？",
+  "家里条件一般，不想读研，哪些专业最好直接避开？",
+];
+
+const SLOT_FIELDS = [
+  { key: "province", label: "省份", placeholder: "河南" },
+  { key: "score", label: "分数", placeholder: "580" },
+  { key: "rank", label: "位次", placeholder: "60000" },
+  { key: "subjects", label: "选科", placeholder: "物化生" },
+  { key: "familyBackground", label: "家庭", placeholder: "一般 / 困难 / 优越" },
+  { key: "careerGoal", label: "目标", placeholder: "求稳 / 高薪 / 体制内" },
+  { key: "exclusions", label: "排除", placeholder: "不学医学、土木" },
+] as const;
+
+function createConversation(mode: ChatMode): ChatConversation {
+  const now = Date.now();
+  return {
+    id: uid("chat"),
+    title: "新对话",
+    mode,
+    messages: [],
+    createdAt: now,
+    updatedAt: now,
   };
-  const cls =
-    colorMap[level] ?? 'border border-dashed border-[var(--color-cred-none)]';
-  return (
-    <span
-      className={`inline-flex h-2.5 w-2.5 items-center justify-center rounded-full text-[8px] ${cls}`}
-      title={level === 'NONE' ? '无数据' : level}
-    >
-      {level === 'A' ? '🟢' : level === 'B' ? '🟡' : level === 'C' ? '🟠' : '⚪'}
-    </span>
-  );
 }
 
-// ============ 来源折叠面板 ============
-function SourcesPanel({ sources }: { sources: SourceItem[] }) {
-  // 打印时强制展开（窗口无法点击，screen 态仍可折叠）
-  const [open, setOpen] = useState(false);
-  if (!sources || sources.length === 0) return null;
-
-  return (
-    <div className="print-visible mt-3 border-l-2 border-[var(--color-border)] pl-3">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 font-mono text-xs text-[var(--color-fg-dim)] transition-colors hover:text-[var(--color-fg)]"
-      >
-        <span className={`transition-transform ${open ? 'rotate-90' : ''}`}>
-          ▸
-        </span>
-        <span>数据来源 ({sources.length})</span>
-      </button>
-      {/*
-        来源清单：始终渲染到 DOM，screen 折叠时用 hidden 隐藏，
-        打印时由 .print-force-show 强制显示（window.print 无法触发点击展开）。
-      */}
-      <ul className={`print-force-show mt-2 space-y-2 ${open ? '' : 'hidden'}`}>
-          {sources.map((s, i) => (
-            <li key={i} className="text-xs leading-relaxed text-[var(--color-fg-dim)]">
-              <div className="flex items-center gap-1.5">
-                <CredBadge level={s.credibility_level} />
-                <span className="font-medium text-[var(--color-fg)]">
-                  {s.source_name}
-                </span>
-                <span className="text-[var(--color-fg-faint)]">{s.timestamp}</span>
-              </div>
-              <p className="mt-0.5 line-clamp-2">{s.content}</p>
-              {s.url && (
-                <a
-                  href={s.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-0.5 inline-block font-mono text-[10px] text-[var(--color-accent)] hover:underline"
-                >
-                  {s.url.slice(0, 60)}
-                </a>
-              )}
-            </li>
-          ))}
-        </ul>
-    </div>
-  );
+function deriveTitle(messages: ChatMessage[]) {
+  const firstUser = messages.find((message) => message.role === "user");
+  if (!firstUser) return "新对话";
+  return firstUser.content.replace(/\s+/g, " ").slice(0, 24);
 }
 
-// ============ 单条消息渲染 ============
-function MessageItem({ msg }: { msg: ChatMessage }) {
-  const isUser = msg.role === 'user';
-
-  return (
-    <div className={`mb-4 ${isUser ? 'flex justify-end' : ''}`}>
-      <div
-        className={`rounded-sm border px-3 py-2.5 text-sm leading-relaxed sm:max-w-[85%] sm:px-4 sm:py-3 ${
-          isUser
-            ? 'border-[var(--color-accent-dim)] bg-[var(--color-bg-card)] text-[var(--color-fg)]'
-            : 'border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[var(--color-fg)]'
-        }`}
-      >
-        {/* 消息头 */}
-        <div className="mb-1.5 flex items-center gap-2">
-          <span className="font-mono text-[10px] uppercase tracking-widest text-[var(--color-fg-faint)]">
-            {isUser ? 'you' : 'diagnostic'}
-          </span>
-          {msg.phase && (
-            <span className="rounded-sm bg-[var(--color-accent)] px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[var(--color-bg)]">
-              {(PHASE_LABELS[msg.phase]?.icon ?? '')}{' '}
-              {PHASE_LABELS[msg.phase]?.label ?? msg.phase}
-            </span>
-          )}
-          {msg.streaming && (
-            <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--color-accent)]" />
-          )}
-        </div>
-
-        {/* 消息体 */}
-        {/* assistant 完成态用三段式卡片；流式中途/解析失败用单块 fallback */}
-        {!isUser && !msg.streaming ? (
-          <SectionReport msg={msg} />
-        ) : (
-          <div
-            className="whitespace-pre-wrap break-words"
-            dangerouslySetInnerHTML={{
-              __html: formatMarkdown(msg.content),
-            }}
-          />
-        )}
-
-        {/* P5a：禁用词警告条 */}
-        {msg.warnings && msg.warnings.length > 0 && (
-          <div className="mt-2 rounded-sm border border-[var(--color-danger)] bg-[var(--color-danger)]/10 px-3 py-2 font-mono text-xs text-[var(--color-danger)]">
-            {msg.warnings.map((w, i) => (
-              <div key={i}>{w}</div>
-            ))}
-          </div>
-        )}
-
-        {/* 来源面板 */}
-        {!msg.streaming && msg.sources && <SourcesPanel sources={msg.sources} />}
-
-        {/* 导出栏：仅 assistant 完成态显示 */}
-        {!isUser && !msg.streaming && msg.content.trim().length > 0 && (
-          <ExportBar msg={msg} />
-        )}
-      </div>
-    </div>
-  );
+function formatTime(timestamp: number) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(timestamp);
 }
 
-/**
- * 极简 markdown 渲染（粗体 + 行内 code + 可信度徽章 + 来源引用）
- *
- * P4：实现已提取到 lib/chat/format.ts，供 terminal-chat 与 section-report 共享，
- * 消除两份格式漂移风险（EXECUTION_RULES §6 文档同源）。此处仅 re-export 保持向后兼容。
- *
- * 历史 P3d 增强说明（逻辑现归 format.ts）：
- *   - 🟢🟡🟠⚪ → 内联可信度徽章（带 tooltip 和 CSS 变量着色）
- *   - [来源名] → 内联来源引用标记（带边框和悬停提示）
- *   - 保留原有粗体/代码渲染
- */
-
-// ============ 槽位采集面板 ============
-function SlotPanel({
-  slots,
-  onUpdate,
-  disabled,
-}: {
-  slots: SlotState;
-  onUpdate: (key: keyof SlotState, value: string) => void;
-  disabled: boolean;
-}) {
-  const fields: { key: keyof SlotState; label: string; placeholder: string; required: boolean }[] = [
-    { key: 'province', label: '省份', placeholder: '如：河南', required: true },
-    { key: 'score', label: '分数', placeholder: '如：620', required: false },
-    { key: 'rank', label: '位次', placeholder: '如：15000', required: false },
-    { key: 'subjects', label: '选科', placeholder: '如：物化生', required: false },
-    { key: 'familyBackground', label: '家庭条件', placeholder: '困难/一般/优越', required: true },
-    { key: 'careerGoal', label: '就业诉求', placeholder: '求稳/求高薪/体制内/可深造', required: false },
-    { key: 'exclusions', label: '排除专业', placeholder: '如：计算机,医学', required: false },
-  ];
-
-  return (
-    <div className="space-y-2">
-      {fields.map((f) => (
-        <div key={f.key} className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
-          <label className="font-mono text-[10px] uppercase tracking-wider text-[var(--color-fg-faint)] sm:w-20 sm:shrink-0 sm:text-right">
-            {f.label}
-            {f.required && <span className="ml-0.5 text-[var(--color-danger)]">*</span>}
-          </label>
-          <input
-            type="text"
-            value={slots[f.key]}
-            onChange={(e) => onUpdate(f.key, e.target.value)}
-            placeholder={f.placeholder}
-            disabled={disabled}
-            className="flex-1 border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono text-xs text-[var(--color-fg)] placeholder-[var(--color-fg-faint)] transition-colors focus:border-[var(--color-accent)] focus:outline-none disabled:opacity-50"
-          />
-          {f.required && slots[f.key] && (
-            <span className="text-[var(--color-cred-a)] text-xs">✓</span>
-          )}
-        </div>
-      ))}
-    </div>
-  );
+function safeReadConversations(): ChatConversation[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as ChatConversation[];
+    if (!Array.isArray(parsed)) return null;
+    return parsed.filter((item) => item && typeof item.id === "string");
+  } catch {
+    return null;
+  }
 }
 
-// ============ 主组件：TerminalChat ============
+function credibilityLabel(source: SourceItem) {
+  const labels: Record<SourceItem["credibility_level"], string> = {
+    A: "官方/一手",
+    B: "权威媒体",
+    C: "第三方",
+    NONE: "待核验",
+  };
+  return labels[source.credibility_level] ?? "待核验";
+}
+
 export default function TerminalChat() {
   const {
     messages,
@@ -225,201 +114,369 @@ export default function TerminalChat() {
     currentPhase,
     sendMessage,
     updateSlot,
+    replaceMessages,
     reset,
+    stop,
   } = useChatStream();
 
-  const [input, setInput] = useState('');
-  const [showSlots, setShowSlots] = useState(true);
-  const listRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [hydrated, setHydrated] = useState(false);
+  const [conversations, setConversations] = useState<ChatConversation[]>([]);
+  const [activeId, setActiveId] = useState<string>("");
+  const [mode, setMode] = useState<ChatMode>("apply");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [input, setInput] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  // 自动滚动到底部
+  const copy = MODE_COPY[mode];
+
   useEffect(() => {
-    if (listRef.current) {
-      listRef.current.scrollTop = listRef.current.scrollHeight;
-    }
-  }, [messages]);
+    const storedTheme = window.localStorage.getItem(THEME_KEY);
+    const nextTheme = storedTheme === "dark" ? "dark" : "light";
+    const stored = safeReadConversations();
+    const initial = stored?.length ? stored : [createConversation("apply")];
+    const storedActive = window.localStorage.getItem(ACTIVE_KEY);
+    const active = initial.find((item) => item.id === storedActive) ?? initial[0];
 
-  // 快捷键：Enter 发送，Shift+Enter 换行
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
+    setTheme(nextTheme);
+    setConversations(initial);
+    setActiveId(active.id);
+    setMode(active.mode);
+    replaceMessages(active.messages ?? []);
+    setHydrated(true);
+  }, [replaceMessages]);
 
-  const handleSend = () => {
-    if (!input.trim() || isStreaming) return;
-    sendMessage(input);
-    setInput('');
-    // 收起槽位面板（首次发送后）
-    if (messages.length === 0) setShowSlots(false);
-  };
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    if (hydrated) window.localStorage.setItem(THEME_KEY, theme);
+  }, [hydrated, theme]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, currentPhase]);
+
+  useEffect(() => {
+    if (!hydrated || !activeId) return;
+    setConversations((current) =>
+      current.map((conversation) =>
+        conversation.id === activeId
+          ? {
+              ...conversation,
+              mode,
+              messages,
+              title: deriveTitle(messages),
+              updatedAt: Date.now(),
+            }
+          : conversation
+      )
+    );
+  }, [activeId, hydrated, messages, mode]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
+    window.localStorage.setItem(ACTIVE_KEY, activeId);
+  }, [activeId, conversations, hydrated]);
+
+  function startConversation(nextMode = mode) {
+    const next = createConversation(nextMode);
+    setConversations((current) => [next, ...current]);
+    setActiveId(next.id);
+    setMode(nextMode);
+    reset();
+  }
+
+  function openConversation(conversation: ChatConversation) {
+    if (conversation.id === activeId) return;
+    stop();
+    setActiveId(conversation.id);
+    setMode(conversation.mode);
+    replaceMessages(conversation.messages ?? []);
+  }
+
+  function deleteConversation(id: string) {
+    const next = conversations.filter((conversation) => conversation.id !== id);
+    if (!next.length) {
+      const fresh = createConversation(mode);
+      setConversations([fresh]);
+      setActiveId(fresh.id);
+      replaceMessages([]);
+      return;
+    }
+
+    setConversations(next);
+    if (id === activeId) {
+      setActiveId(next[0].id);
+      setMode(next[0].mode);
+      replaceMessages(next[0].messages ?? []);
+    }
+  }
+
+  function changeMode(nextMode: ChatMode) {
+    setMode(nextMode);
+    setConversations((current) =>
+      current.map((conversation) =>
+        conversation.id === activeId ? { ...conversation, mode: nextMode } : conversation
+      )
+    );
+  }
+
+  async function submitMessage(text = input) {
+    const clean = text.trim();
+    if (!clean || isStreaming) return;
+    setInput("");
+    await sendMessage(clean, { mode });
+  }
 
   return (
-    <div className="flex h-screen flex-col bg-[var(--color-bg)]">
-      {/* 顶栏 */}
-      <header className="no-print flex items-center justify-between border-b border-[var(--color-border)] px-3 py-2 sm:px-4 sm:py-3">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <a
-            href="/"
-            className="font-mono text-xs text-[var(--color-fg-dim)] transition-colors hover:text-[var(--color-accent)]"
-          >
-            ←
-          </a>
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--color-accent)]" />
-            <span className="hidden font-mono text-xs uppercase tracking-widest text-[var(--color-fg-dim)] sm:inline">
-              gaokao-realist · diagnostic
-            </span>
-            {/* P5b: 移动端只显示 logo 圆点，隐藏长文本 */}
-            <span className="font-mono text-xs uppercase tracking-widest text-[var(--color-fg-dim)] sm:hidden">
-              diagnostic
-            </span>
+    <main className="app-shell">
+      <aside className="sidebar" aria-label="对话列表和考生档案">
+        <div className="brand-block">
+          <div className="brand-mark">高</div>
+          <div>
+            <div className="brand-title">现实主义志愿诊断</div>
+            <div className="brand-subtitle">Gaokao Skill</div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          {/* 当前阶段 */}
-          {currentPhase && (
-            <span className="rounded-sm bg-[var(--color-accent)] px-2 py-0.5 font-mono text-[10px] font-semibold text-[var(--color-bg)]">
-              {PHASE_LABELS[currentPhase]?.icon ?? ''}{' '}
-              {PHASE_LABELS[currentPhase]?.label ?? currentPhase}
-            </span>
-          )}
-          <button
-            onClick={reset}
-            className="font-mono text-xs text-[var(--color-fg-faint)] transition-colors hover:text-[var(--color-danger)]"
-            title="重置对话"
-          >
-            [ RESET ]
-          </button>
-        </div>
-      </header>
 
-      {/* 主体：消息列表 */}
-      <div ref={listRef} className="flex-1 overflow-y-auto px-2 py-4 sm:px-4 sm:py-6">
-        {messages.length === 0 ? (
-          /* 空状态：欢迎 + 槽位面板 */
-          <div className="mx-auto max-w-2xl">
-            <div className="mb-6 text-center sm:mb-8">
-              <div className="mb-3 font-mono text-[10px] uppercase tracking-[0.3em] text-[var(--color-accent)] sm:text-xs">
-                // 现实主义志愿诊断终端
-              </div>
-              <p className="text-base font-semibold sm:text-lg">
-                别跟我谈理想。先看就业中位数。
-              </p>
-              <p className="mt-2 text-sm text-[var(--color-fg-dim)]">
-                输入你的高考分数、位次、家庭条件，终端先联网核查数据，再给出诊断报告。
-              </p>
-            </div>
+        <button className="new-chat-button" type="button" onClick={() => startConversation()}>
+          新建对话
+        </button>
 
-            {/* 槽位采集面板 */}
-            <div className="no-print mb-6 rounded-sm border border-[var(--color-border)] bg-[var(--color-bg-card)] p-3 sm:p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="font-mono text-xs uppercase tracking-widest text-[var(--color-accent)]">
-                  // Step 0: 槽位采集
+        <div className="conversation-list">
+          {conversations.map((conversation) => (
+            <button
+              className={`conversation-item ${conversation.id === activeId ? "active" : ""}`}
+              key={conversation.id}
+              type="button"
+              onClick={() => openConversation(conversation)}
+            >
+              <span className="conversation-main">
+                <span className="conversation-title">{conversation.title}</span>
+                <span className="conversation-meta">
+                  {MODE_COPY[conversation.mode].label} / {formatTime(conversation.updatedAt)}
                 </span>
-                <button
-                  onClick={() => setShowSlots(!showSlots)}
-                  className="font-mono text-[10px] text-[var(--color-fg-faint)] hover:text-[var(--color-fg)]"
-                >
-                  [{showSlots ? '收起' : '展开'}]
-                </button>
-              </div>
-              {showSlots && (
-                <SlotPanel
-                  slots={slots}
-                  onUpdate={updateSlot}
-                  disabled={isStreaming}
-                />
-              )}
-            </div>
+              </span>
+              <span
+                className="delete-chat"
+                role="button"
+                tabIndex={0}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  deleteConversation(conversation.id);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    deleteConversation(conversation.id);
+                  }
+                }}
+                aria-label="删除对话"
+              >
+                x
+              </span>
+            </button>
+          ))}
+        </div>
 
-            {/* 提示 */}
-            <div className="font-mono text-center text-xs text-[var(--color-fg-faint)]">
-              填写信息后直接在下方输入你的问题，或按 Enter 发送
-            </div>
-          </div>
-        ) : (
-          /* 消息列表 */
-          <div className="mx-auto max-w-3xl">
-            {/* 槽位快捷栏（折叠） */}
-            {showSlots && (
-              <div className="no-print mb-4 rounded-sm border border-[var(--color-border)] bg-[var(--color-bg-card)] p-2.5 sm:p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="font-mono text-[10px] uppercase text-[var(--color-fg-faint)]">
-                    槽位状态
-                  </span>
-                  <button
-                    onClick={() => setShowSlots(false)}
-                    className="font-mono text-[10px] text-[var(--color-fg-faint)] hover:text-[var(--color-fg)]"
-                  >
-                    [ 收起 ]
-                  </button>
-                </div>
-                <SlotPanel
-                  slots={slots}
-                  onUpdate={updateSlot}
-                  disabled={isStreaming}
+        <section className="profile-card" aria-label="考生档案">
+          <div className="section-kicker">考生档案</div>
+          <div className="slot-grid">
+            {SLOT_FIELDS.map((field) => (
+              <label className="slot-field" key={field.key}>
+                <span>{field.label}</span>
+                <input
+                  value={slots[field.key]}
+                  onChange={(event) => updateSlot(field.key, event.target.value)}
+                  placeholder={field.placeholder}
                 />
-              </div>
-            )}
-            {messages.map((msg) => (
-              <MessageItem key={msg.id} msg={msg} />
+              </label>
             ))}
           </div>
-        )}
+        </section>
+      </aside>
 
-        {/* 错误提示 */}
-        {error && (
-          <div className="mx-auto mt-4 max-w-3xl rounded-sm border border-[var(--color-danger)] bg-[var(--color-danger)]/10 px-3 py-2 font-mono text-xs text-[var(--color-danger)] sm:px-4">
-            ⚠ {error}
+      <section className="chat-stage">
+        <header className="topbar">
+          <div>
+            <div className="mode-eyebrow">{copy.eyebrow}</div>
+            <h1>{copy.title}</h1>
           </div>
+
+          <div className="topbar-actions">
+            <div className="mode-switch" role="tablist" aria-label="模式切换">
+              {(["apply", "roast"] as ChatMode[]).map((item) => (
+                <button
+                  className={item === mode ? "selected" : ""}
+                  key={item}
+                  type="button"
+                  onClick={() => changeMode(item)}
+                >
+                  {MODE_COPY[item].label}
+                </button>
+              ))}
+            </div>
+            <button className="ghost-button" type="button" onClick={() => setSettingsOpen(true)}>
+              设置
+            </button>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+            >
+              {theme === "dark" ? "浅色" : "深色"}
+            </button>
+          </div>
+        </header>
+
+        <div className={`persona-strip ${mode}`}>
+          <div className="persona-portrait" aria-hidden="true">
+            <div className="portrait-glare" />
+            <span>{copy.persona}</span>
+          </div>
+          <div>
+            <div className="persona-name">现实派报考参谋</div>
+            <p>{copy.promise}</p>
+          </div>
+          <div className="status-pill">
+            {isStreaming ? currentPhase || "正在处理" : "服务端代理"}
+          </div>
+        </div>
+
+        <div className="message-panel">
+          {!messages.length ? (
+            <section className="welcome-card">
+              <div className="welcome-kicker">从一句真问题开始</div>
+              <h2>别先问“我喜欢什么”，先问“这个选择毕业后怎么落地”。</h2>
+              <p>
+                输入省份、分数、位次、选科、家庭条件和目标。信息不够时，系统会先追问；信息够了才进入数据检索和诊断。
+              </p>
+              <div className="quick-prompts">
+                {QUICK_PROMPTS.map((prompt) => (
+                  <button key={prompt} type="button" onClick={() => submitMessage(prompt)}>
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : (
+            messages.map((message) => <MessageBubble key={message.id} message={message} />)
+          )}
+          <div ref={bottomRef} />
+        </div>
+
+        {error ? <div className="error-banner">{error}</div> : null}
+
+        <form
+          className="composer"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submitMessage();
+          }}
+        >
+          <textarea
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                void submitMessage();
+              }
+            }}
+            placeholder={copy.placeholder}
+            rows={2}
+          />
+          <div className="composer-actions">
+            {isStreaming ? (
+              <button className="secondary-action" type="button" onClick={stop}>
+                停止
+              </button>
+            ) : null}
+            <button className="send-button" type="submit" disabled={!input.trim() || isStreaming}>
+              {isStreaming ? "分析中" : "发送"}
+            </button>
+          </div>
+        </form>
+      </section>
+
+      {settingsOpen ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setSettingsOpen(false)}>
+          <section className="settings-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+            <button className="modal-close" type="button" onClick={() => setSettingsOpen(false)}>
+              x
+            </button>
+            <div className="section-kicker">API 设置</div>
+            <h2>当前使用服务端代理</h2>
+            <p>
+              浏览器不会保存模型密钥。部署时只需要在 Render 环境变量里配置 LLM_PROVIDER、LLM_BASE_URL、LLM_API_KEY 和 LLM_MODEL。
+            </p>
+            <div className="settings-grid">
+              <div>
+                <span>调用入口</span>
+                <strong>/api/chat</strong>
+              </div>
+              <div>
+                <span>数据检索</span>
+                <strong>服务端统一处理</strong>
+              </div>
+              <div>
+                <span>本地记录</span>
+                <strong>只保存对话文本</strong>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
+    </main>
+  );
+}
+
+function MessageBubble({ message }: { message: ChatMessage }) {
+  return (
+    <article className={`message-bubble ${message.role}`}>
+      <div className="message-label">
+        <span>{message.role === "user" ? "你" : "诊断"}</span>
+        {message.streaming && message.phase ? <em>{message.phase}</em> : null}
+      </div>
+      <div className="message-content">
+        {message.content ? (
+          message.content.split("\n").map((line, index) => (
+            <p key={`${message.id}_${index}`}>{line || "\u00a0"}</p>
+          ))
+        ) : (
+          <p className="typing-line">正在组织判断...</p>
         )}
       </div>
-
-      {/* 输入区 */}
-      <div className="no-print border-t border-[var(--color-border)] px-2 py-2 sm:px-4 sm:py-3">
-        <div className="mx-auto flex max-w-3xl items-end gap-2">
-          {/* 槽位快捷切换 */}
-          <button
-            onClick={() => setShowSlots(!showSlots)}
-            className={`mb-1.5 shrink-0 border px-2 py-1 font-mono text-[10px] transition-colors ${
-              showSlots
-                ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
-                : 'border-[var(--color-border)] text-[var(--color-fg-faint)] hover:text-[var(--color-fg-dim)]'
-            }`}
-            title="切换槽位面板"
-          >
-            槽位
-          </button>
-
-          {/* 输入框 */}
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={
-              isStreaming
-                ? '正在诊断中...'
-                : '输入你的问题（Enter 发送，Shift+Enter 换行）'
-            }
-            disabled={isStreaming}
-            rows={1}
-            className="flex-1 resize-none rounded-sm border border-[var(--color-border)] bg-[var(--color-bg-card)] px-3 py-2 font-mono text-sm text-[var(--color-fg)] placeholder-[var(--color-fg-faint)] transition-colors focus:border-[var(--color-accent)] focus:outline-none disabled:opacity-50"
-          />
-
-          {/* 发送按钮 */}
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || isStreaming}
-            className="mb-1.5 shrink-0 border border-[var(--color-accent)] bg-[var(--color-accent)] px-4 py-1.5 font-mono text-xs font-semibold text-[var(--color-bg)] transition-all hover:bg-transparent hover:text-[var(--color-accent)] disabled:border-[var(--color-border)] disabled:bg-transparent disabled:text-[var(--color-fg-faint)]"
-          >
-            &gt;_ 发送
-          </button>
+      {message.warnings?.length ? (
+        <div className="warning-list">
+          {message.warnings.map((warning) => (
+            <span key={warning}>{warning}</span>
+          ))}
         </div>
-      </div>
+      ) : null}
+      {message.sources?.length ? <SourceList sources={message.sources} /> : null}
+    </article>
+  );
+}
+
+function SourceList({ sources }: { sources: SourceItem[] }) {
+  return (
+    <div className="source-list">
+      <div className="source-title">数据来源</div>
+      {sources.slice(0, 6).map((source) => (
+        <a
+          href={source.url}
+          key={`${source.url}_${source.content}`}
+          rel="noreferrer"
+          target="_blank"
+          className="source-item"
+        >
+          <span>{credibilityLabel(source)}</span>
+          <strong>{source.source_name || "未命名来源"}</strong>
+          <small>{source.content}</small>
+        </a>
+      ))}
     </div>
   );
 }

@@ -1,155 +1,729 @@
 @import "tailwindcss";
 
-/* ============================================
-   数据终端美学 · 设计系统
-   见 ARCHITECTURE.md §5
-   反消费级圆角渐变，走 Bloomberg Terminal × Linear 克制路线
-   ============================================ */
-
-@theme {
-  /* 色彩系统：深色为主 + 琥珀强调（警示感，契合"风险警告"主题） */
-  --color-bg: #0a0a0a;
-  --color-bg-elevated: #141414;
-  --color-bg-card: #1a1a1a;
-  --color-border: #2a2a2a;
-  --color-border-bright: #3a3a3a;
-
-  --color-fg: #e8e8e8;
-  --color-fg-dim: #8a8a8a;
-  --color-fg-faint: #5a5a5a;
-
-  /* 琥珀强调色 */
-  --color-accent: #f59e0b;
-  --color-accent-dim: #b8760a;
-
-  /* 可信度徽章色 */
-  --color-cred-a: #22c55e;
-  --color-cred-b: #eab308;
-  --color-cred-c: #f97316;
-  --color-cred-none: #5a5a5a;
-
-  /* 危险/避坑 */
-  --color-danger: #ef4444;
-
-  /* 字体 */
-  --font-sans: "Source Han Sans CN", "HarmonyOS Sans SC", "PingFang SC",
-    "Microsoft YaHei", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "Cascadia Code", "Fira Code", ui-monospace,
-    monospace;
+:root {
+  color-scheme: light;
+  --bg: #f6efe2;
+  --bg-soft: #efe2cf;
+  --panel: #fffaf0;
+  --panel-strong: #ffffff;
+  --ink: #241913;
+  --muted: #7c6b5d;
+  --faint: #b8a796;
+  --line: #dfcdb8;
+  --line-strong: #c9ad91;
+  --accent: #b42318;
+  --accent-ink: #fff7ee;
+  --gold: #c9892b;
+  --green: #426b45;
+  --shadow: 0 24px 80px rgba(75, 45, 20, 0.18);
+  --radius: 22px;
+  --font-sans: "LXGW WenKai Screen", "Source Han Sans CN", "HarmonyOS Sans SC",
+    "Microsoft YaHei", sans-serif;
+  --font-display: "Noto Serif SC", "Songti SC", "SimSun", serif;
 }
 
-html {
-  background: var(--color-bg);
-  color: var(--color-fg);
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #15110d;
+  --bg-soft: #211914;
+  --panel: #241b15;
+  --panel-strong: #2d2119;
+  --ink: #f6eadb;
+  --muted: #bca996;
+  --faint: #806f62;
+  --line: #433125;
+  --line-strong: #6b4d39;
+  --accent: #e2503e;
+  --accent-ink: #1b100d;
+  --gold: #dfa348;
+  --green: #89a775;
+  --shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(180, 35, 24, 0.16), transparent 26rem),
+    radial-gradient(circle at 88% 12%, rgba(201, 137, 43, 0.18), transparent 24rem),
+    linear-gradient(135deg, var(--bg), var(--bg-soft));
+  color: var(--ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
-body {
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: minmax(270px, 320px) 1fr;
   min-height: 100vh;
+  padding: 18px;
+  gap: 18px;
 }
 
-/* 数字等宽（专业感微观基础） */
-.tabular {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
+.sidebar,
+.chat-stage {
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
 }
 
-/* 扫描线效果（终端质感，极淡） */
-.scanline::before {
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 36px);
+  border-radius: var(--radius);
+  padding: 18px;
+  overflow: hidden;
+}
+
+.brand-block {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.brand-title {
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.brand-subtitle,
+.mode-eyebrow,
+.section-kicker,
+.welcome-kicker {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.new-chat-button,
+.send-button {
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 800;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.new-chat-button {
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.new-chat-button:hover,
+.send-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.conversation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 120px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.conversation-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--ink);
+  padding: 11px 12px;
+  text-align: left;
+}
+
+.conversation-item:hover,
+.conversation-item.active {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--panel-strong) 82%, transparent);
+}
+
+.conversation-main {
+  min-width: 0;
+}
+
+.conversation-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.conversation-meta {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.delete-chat {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  color: var(--faint);
+}
+
+.delete-chat:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
+.profile-card {
+  margin-top: auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--panel-strong) 70%, transparent);
+  padding: 14px;
+}
+
+.slot-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.slot-field {
+  display: grid;
+  gap: 5px;
+}
+
+.slot-field span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.slot-field input,
+.composer textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  color: var(--ink);
+  outline: none;
+}
+
+.slot-field input {
+  border-radius: 12px;
+  padding: 9px 10px;
+}
+
+.slot-field input:focus,
+.composer textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.chat-stage {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto auto;
+  min-width: 0;
+  min-height: calc(100vh - 36px);
+  border-radius: calc(var(--radius) + 8px);
+  overflow: hidden;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 14px;
+}
+
+.topbar h1 {
+  margin: 4px 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4vw, 52px);
+  line-height: 1;
+  letter-spacing: -0.08em;
+}
+
+.topbar-actions,
+.mode-switch,
+.composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mode-switch {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel-strong) 72%, transparent);
+  padding: 4px;
+}
+
+.mode-switch button,
+.ghost-button,
+.secondary-action {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  padding: 9px 12px;
+}
+
+.mode-switch button.selected {
+  background: var(--ink);
+  color: var(--panel);
+}
+
+.ghost-button,
+.secondary-action {
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel-strong) 70%, transparent);
+}
+
+.persona-strip {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  margin: 0 24px 14px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 14px;
+  overflow: hidden;
+}
+
+.persona-strip::before {
   content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent 55%),
+    repeating-linear-gradient(135deg, transparent 0 10px, color-mix(in srgb, var(--line) 45%, transparent) 10px 11px);
+  pointer-events: none;
+}
+
+.persona-strip > * {
+  position: relative;
+}
+
+.persona-portrait {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 36% 24%, rgba(255, 255, 255, 0.38), transparent 22%),
+    linear-gradient(145deg, var(--accent), #5d1913);
+  color: #fff5e9;
+  font-family: var(--font-display);
+  font-weight: 900;
+  overflow: hidden;
+}
+
+.persona-strip.roast .persona-portrait {
+  background:
+    radial-gradient(circle at 34% 22%, rgba(255, 255, 255, 0.32), transparent 22%),
+    linear-gradient(145deg, #1f2937, #7f1d1d);
+}
+
+.portrait-glare {
+  position: absolute;
+  inset: -30% auto auto -30%;
+  width: 70%;
+  height: 140%;
+  background: rgba(255, 255, 255, 0.22);
+  transform: rotate(22deg);
+}
+
+.persona-name {
+  font-weight: 900;
+}
+
+.persona-strip p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.status-pill {
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
+.message-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: auto;
+  padding: 8px 24px 18px;
+}
+
+.welcome-card {
+  margin: auto;
+  max-width: 760px;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--panel-strong) 94%, transparent), color-mix(in srgb, var(--panel) 78%, transparent)),
+    radial-gradient(circle at 88% 14%, color-mix(in srgb, var(--gold) 26%, transparent), transparent 20rem);
+  padding: clamp(24px, 5vw, 46px);
+}
+
+.welcome-card h2 {
+  margin: 10px 0;
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4vw, 48px);
+  line-height: 1.08;
+  letter-spacing: -0.06em;
+}
+
+.welcome-card p {
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+.quick-prompts {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.quick-prompts button {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--panel-strong) 76%, transparent);
+  color: var(--ink);
+  padding: 13px 14px;
+  text-align: left;
+}
+
+.quick-prompts button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.message-bubble {
+  max-width: min(760px, 88%);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--panel-strong) 84%, transparent);
+  padding: 15px 16px;
+  animation: rise-in 0.24s ease both;
+}
+
+.message-bubble.user {
+  align-self: flex-end;
+  background: var(--ink);
+  color: var(--panel);
+}
+
+.message-bubble.assistant {
+  align-self: flex-start;
+}
+
+.message-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.message-label em {
+  color: var(--accent);
+  font-style: normal;
+  font-weight: 700;
+}
+
+.message-content p {
+  margin: 0 0 8px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
+.message-content p:last-child {
+  margin-bottom: 0;
+}
+
+.typing-line {
+  color: var(--muted);
+}
+
+.warning-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.warning-list span,
+.error-banner {
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  padding: 10px 12px;
+}
+
+.source-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.source-title {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.source-item {
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: inherit;
+  padding: 10px;
+  text-decoration: none;
+}
+
+.source-item span {
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.source-item small {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.error-banner {
+  margin: 0 24px 12px;
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 86%, transparent);
+  padding: 16px 24px 20px;
+}
+
+.composer textarea {
+  min-height: 60px;
+  resize: none;
+  border-radius: 18px;
+  padding: 14px 16px;
+}
+
+.composer-actions {
+  align-self: end;
+}
+
+.send-button {
+  min-width: 94px;
+  padding: 14px 18px;
+}
+
+.modal-backdrop {
   position: fixed;
   inset: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent 0,
-    transparent 2px,
-    rgba(255, 255, 255, 0.012) 3px,
-    rgba(255, 255, 255, 0.012) 3px
-  );
-  z-index: 1;
+  display: grid;
+  place-items: center;
+  background: rgba(20, 12, 6, 0.46);
+  padding: 20px;
+  z-index: 20;
 }
 
-/* 滚动条（终端风） */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: var(--color-bg);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--color-border-bright);
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-fg-faint);
+.settings-modal {
+  position: relative;
+  width: min(520px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 26px;
 }
 
-/* 文本选中色 */
-::selection {
-  background: var(--color-accent-dim);
-  color: var(--color-bg);
+.settings-modal h2 {
+  margin: 8px 0;
+  font-family: var(--font-display);
+  font-size: 30px;
 }
 
-/* ============================================
-   打印 / 导出 PDF 样式（P4）
-   触发：ExportBar 的「🖨 打印 / PDF」按钮 → window.print()
-   策略：白底黑字、隐藏 UI chrome（顶栏/输入区/槽位面板/导出栏）、
-        三段卡片转浅边白底、来源清单保留、卡片不跨页断裂。
-   ============================================ */
+.settings-modal p {
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+.modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  width: 34px;
+  height: 34px;
+}
+
+.settings-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.settings-grid div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.settings-grid span {
+  color: var(--muted);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 920px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar,
+  .chat-stage {
+    min-height: auto;
+  }
+
+  .conversation-list {
+    max-height: 180px;
+  }
+
+  .topbar,
+  .persona-strip,
+  .composer {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar {
+    align-items: flex-start;
+  }
+
+  .topbar-actions {
+    flex-wrap: wrap;
+  }
+
+  .persona-strip {
+    margin-inline: 16px;
+  }
+
+  .message-panel {
+    min-height: 46vh;
+    padding-inline: 16px;
+  }
+
+  .composer {
+    padding-inline: 16px;
+  }
+
+  .message-bubble {
+    max-width: 100%;
+  }
+}
+
 @media print {
-  /* 全局转白底黑字，关闭扫描线终端效果 */
-  html,
+  .sidebar,
+  .topbar-actions,
+  .composer,
+  .persona-strip,
+  .error-banner {
+    display: none !important;
+  }
+
+  .app-shell,
+  .chat-stage {
+    display: block;
+    min-height: auto;
+    padding: 0;
+    box-shadow: none;
+    border: 0;
+  }
+
   body {
-    background: #fff !important;
-    color: #000 !important;
-  }
-  .scanline::before {
-    display: none !important;
-  }
-
-  /* 隐藏所有标记为 no-print 的 UI chrome */
-  .no-print {
-    display: none !important;
-  }
-
-  /* 只显示报告区：隐藏所有元素，再让报告相关区域可见 */
-  body * {
-    visibility: hidden;
-  }
-  /* 报告卡片、来源面板、导出栏标记的元素可见 */
-  .section-card,
-  .section-card *,
-  .print-visible,
-  .print-visible * {
-    visibility: visible;
-  }
-  /* 来源清单在 screen 折叠时用 Tailwind hidden 隐藏；打印强制显示 */
-  .print-force-show {
-    display: block !important;
-  }
-  /* 报告卡片占满页面起点 */
-  .section-card {
-    position: relative;
-    border: 1px solid #ccc !important;
-    background: #fff !important;
-    color: #000 !important;
-    break-inside: avoid;
-    page-break-inside: avoid;
-    margin-bottom: 12px;
-  }
-  /* 卡片左侧色条在打印里转深灰，避免彩色背景浪费墨 */
-  .section-card > div:first-child {
-    background: #333 !important;
-  }
-  /* 卡片内文字、标题转黑 */
-  .section-card,
-  .section-card span,
-  .section-card strong,
-  .section-card code {
-    color: #000 !important;
-    background: transparent !important;
-    border-color: #999 !important;
+    background: #fff;
+    color: #000;
   }
 }

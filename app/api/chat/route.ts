@@ -1,86 +1,42 @@
-/**
- * SSE Chat API 路由（app/api/chat/route.ts）
- *
- * 接收用户消息，编排 AgenticProtocol，以 Server-Sent Events 流式回传事件。
- *
- * 前端 POST /api/chat，body: { message: string, profile?: Partial<StudentProfile> }
- * 响应 Content-Type: text/event-stream，每行一个 SSE event。
- *
- * 事件类型与 ProtocolEvent 对齐（见 lib/research/protocol.ts）。
- */
+import { NextRequest } from "next/server";
+import { getDataProvider, getLLMProvider } from "../../../lib/providers/registry";
+import { AgenticProtocol } from "../../../lib/research/protocol";
+import { filterTaboo } from "../../../lib/research/taboo-filter";
+import { loadSkillPrompt } from "../../../lib/skill/loader";
+import type { StudentProfile } from "../../../lib/research/protocol";
 
-import { NextRequest } from 'next/server';
-import { getLLMProvider, getDataProvider } from '../../../lib/providers/registry';
-import { AgenticProtocol } from '../../../lib/research/protocol';
-import { loadSkillPrompt } from '../../../lib/skill/loader';
-import { filterTaboo } from '../../../lib/research/taboo-filter';
-import type { StudentProfile } from '../../../lib/research/protocol';
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
-// P3b：Vercel Runtime 声明。
-// SSE 流式诊断含 9 并行 WebSearch + LLM 流式，总耗时可能 30-50s，
-// Vercel 默认 10s 超时会杀连接。用 nodejs runtime（Edge 不支持部分 Node API）
-// + maxDuration=60 覆盖完整诊断流程。
-export const runtime = 'nodejs';
-// Vercel 免费版 Hobby plan 上限 10s，Pro 版 60s。
-// 这里设 10 兼容免费版；升级 Pro 后改为 60。
-export const maxDuration = 10;
+type ChatBody = {
+  message?: string;
+  mode?: "apply" | "roast";
+  profile?: Partial<StudentProfile>;
+};
 
-/** POST handler: 接收消息，返回 SSE 流 */
 export async function POST(req: NextRequest) {
-  // P5c：HTTP 方法守卫
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: '仅支持 POST 方法' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json', Allow: 'POST' },
-    });
-  }
+  let body: ChatBody;
 
-  // P5c：req.json() 异常守卫（畸形 body 不再裸崩）
-  let body: { message?: string; profile?: Partial<StudentProfile> };
   try {
     body = await req.json();
   } catch {
-    return new Response(JSON.stringify({ error: '请求格式错误：JSON 解析失败' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonError("请求格式错误：无法解析 JSON。", 400);
   }
 
-  const message: string = body.message ?? '';
-  const incomingProfile: Partial<StudentProfile> = body.profile ?? {};
+  const message = body.message?.trim() ?? "";
+  if (!message) return jsonError("消息不能为空。", 400);
 
-  // 防空
-  if (!message.trim()) {
-    return new Response(JSON.stringify({ error: '消息不能为空' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  // 检查 LLM 配置
   let skillPrompt: string;
   try {
-    const llm = getLLMProvider();
-    // 验证连接（调一次 chat 确保 provider 可用）
-    void llm;
-    skillPrompt = loadSkillPrompt();
+    getLLMProvider();
+    skillPrompt = buildModePrompt(loadSkillPrompt(), body.mode ?? "apply");
   } catch (err) {
-    return new Response(
-      JSON.stringify({
-        error: `服务未就绪: ${(err as Error).message}`,
-      }),
-      {
-        status: 503,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return jsonError(`服务端模型配置不可用：${(err as Error).message}`, 503);
   }
 
-  // 构建 StudentProfile：合并前端传入的 profile + 从消息解析关键字段
-  const profile = buildProfile(message, incomingProfile);
-
-  // 创建 SSE 流
+  const profile = buildProfile(message, body.profile ?? {});
   const encoder = new TextEncoder();
+
   const stream = new ReadableStream({
     async start(controller) {
       const send = (event: string, data: unknown) => {
@@ -90,39 +46,38 @@ export async function POST(req: NextRequest) {
       };
 
       try {
-        const llm = getLLMProvider();
-        const data = getDataProvider();
-        const protocol = new AgenticProtocol(llm, data, skillPrompt);
+        const protocol = new AgenticProtocol(
+          getLLMProvider(),
+          getDataProvider(),
+          skillPrompt
+        );
 
-        // 发送用户消息确认
-        send('user_message', { message });
+        send("user_message", { message });
 
-        // 执行诊断，事件流式回传
-        const result = await protocol.diagnose(profile, (evt) => {
-          send(evt.type, evt);
+        const result = await protocol.diagnose(profile, (event) => {
+          send(event.type, event);
         });
 
-        // P5a：禁用词后处理。对完成报告做 filterTaboo，
-        // 命中时追加 warning 事件（前端收到后显示红色警告条）
         const taboo = filterTaboo(result.report);
-        if (taboo.hits.length > 0) {
-          send('warning', {
-            message: `表达 DNA 警告：命中禁用词 ${taboo.hits.map((w) => `「${w}」`).join('、')}`,
+        if (taboo.hits.length) {
+          send("warning", {
+            message: `表达复核提醒：命中 ${taboo.hits
+              .map((word) => `「${word}」`)
+              .join("、")}，建议检查措辞是否过度。`,
           });
         }
 
-        // 发送最终来源汇总
-        send('sources', {
-          sources: result.sources.map((s) => ({
-            content: s.content.slice(0, 200),
-            url: s.url,
-            source_name: s.source_name,
-            timestamp: s.timestamp,
-            credibility_level: s.credibility_level,
+        send("sources", {
+          sources: result.sources.map((source) => ({
+            content: source.content.slice(0, 220),
+            url: source.url,
+            source_name: source.source_name,
+            timestamp: source.timestamp,
+            credibility_level: source.credibility_level,
           })),
         });
       } catch (err) {
-        send('error', { message: (err as Error).message });
+        send("error", { message: (err as Error).message || "诊断失败。" });
       } finally {
         controller.close();
       }
@@ -131,30 +86,53 @@ export async function POST(req: NextRequest) {
 
   return new Response(stream, {
     headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
     },
   });
 }
 
-/**
- * 从消息文本 + 前端传入的 profile 合并出 StudentProfile。
- * 前端如果已经解析出结构化字段（槽位采集阶段累积），优先用结构化值。
- */
+function jsonError(error: string, status: number) {
+  return new Response(JSON.stringify({ error }), {
+    status,
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+  });
+}
+
 function buildProfile(
   message: string,
   incoming: Partial<StudentProfile>
 ): StudentProfile {
   return {
-    province: incoming.province ?? undefined,
-    score: incoming.score ?? undefined,
-    rank: incoming.rank ?? undefined,
-    subjects: incoming.subjects ?? undefined,
-    familyBackground: incoming.familyBackground ?? undefined,
-    candidates: incoming.candidates ?? undefined,
-    exclusions: incoming.exclusions ?? undefined,
-    careerGoal: incoming.careerGoal ?? undefined,
+    province: normalizeText(incoming.province),
+    score: normalizeNumber(incoming.score),
+    rank: normalizeNumber(incoming.rank),
+    subjects: normalizeText(incoming.subjects),
+    familyBackground: normalizeText(incoming.familyBackground),
+    candidates: Array.isArray(incoming.candidates) ? incoming.candidates : undefined,
+    exclusions: Array.isArray(incoming.exclusions) ? incoming.exclusions : undefined,
+    careerGoal: normalizeText(incoming.careerGoal),
     rawQuestion: message,
   };
+}
+
+function normalizeText(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function normalizeNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string") return undefined;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function buildModePrompt(basePrompt: string, mode: "apply" | "roast") {
+  if (mode === "roast") {
+    return `${basePrompt}\n\n当前前端模式：吐槽。回答可以更直接、更有压迫感，但必须基于事实和公开数据，不冒充真人，不造谣，不做人身攻击。`;
+  }
+
+  return `${basePrompt}\n\n当前前端模式：报考。回答要优先给清晰方案、风险排序和下一步验证动作。`;
 }

@@ -1,266 +1,342 @@
-/**
- * SSE 连接 hook（lib/chat/use-chat-stream.ts）
- *
- * 管理 /api/chat 的 SSE 连接：发送消息、解析事件、更新消息列表。
- * 不含 UI 逻辑，纯状态管理。
- */
-
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
-import type { ChatMessage, SlotState, SourceItem, uid } from './types';
+import {
+  type Dispatch,
+  type SetStateAction,
+  useCallback,
+  useRef,
+  useState,
+} from "react";
+import type { ChatMessage, ChatMode, SlotState, SourceItem } from "./types";
+import { uid } from "./types";
 
-export type { ChatMessage, SlotState, SourceItem };
+export type { ChatMessage, ChatMode, SlotState, SourceItem };
 
-/** hook 返回值 */
+interface SendOptions {
+  mode: ChatMode;
+}
+
 interface UseChatStreamReturn {
   messages: ChatMessage[];
+  setMessages: Dispatch<SetStateAction<ChatMessage[]>>;
   slots: SlotState;
   isStreaming: boolean;
   error: string | null;
   currentPhase: string;
-  sendMessage: (text: string) => void;
+  sendMessage: (text: string, options: SendOptions) => Promise<void>;
   updateSlot: (key: keyof SlotState, value: string) => void;
+  replaceMessages: (nextMessages: ChatMessage[]) => void;
   reset: () => void;
+  stop: () => void;
 }
 
-let _uidCounter = 0;
-function nextId(): string {
-  return `msg_${Date.now().toString(36)}_${(_uidCounter++).toString(36)}`;
-}
-
-/** 空槽位状态 */
 const EMPTY_SLOTS: SlotState = {
-  province: '',
-  score: '',
-  rank: '',
-  subjects: '',
-  familyBackground: '',
-  careerGoal: '',
-  exclusions: '',
+  province: "",
+  score: "",
+  rank: "",
+  subjects: "",
+  familyBackground: "",
+  careerGoal: "",
+  exclusions: "",
 };
+
+const PHASE_LABELS: Record<string, string> = {
+  slot: "补齐考生信息",
+  classify: "判断问题类型",
+  research: "检索公开数据",
+  checkpoint: "交叉核验结论",
+  answer: "生成诊断报告",
+};
+
+function buildProfile(slots: SlotState) {
+  const profile: Record<string, unknown> = {};
+
+  if (slots.province.trim()) profile.province = slots.province.trim();
+  if (slots.score.trim()) {
+    const score = Number.parseInt(slots.score, 10);
+    if (Number.isFinite(score)) profile.score = score;
+  }
+  if (slots.rank.trim()) {
+    const rank = Number.parseInt(slots.rank, 10);
+    if (Number.isFinite(rank)) profile.rank = rank;
+  }
+  if (slots.subjects.trim()) profile.subjects = slots.subjects.trim();
+  if (slots.familyBackground.trim()) {
+    profile.familyBackground = slots.familyBackground.trim();
+  }
+  if (slots.careerGoal.trim()) profile.careerGoal = slots.careerGoal.trim();
+  if (slots.exclusions.trim()) {
+    profile.exclusions = slots.exclusions
+      .split(/[,，;；、\s]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return profile;
+}
+
+function extractPhase(data: unknown): string {
+  if (typeof data === "string") return PHASE_LABELS[data] ?? data;
+  if (data && typeof data === "object" && "phase" in data) {
+    const phase = String((data as { phase: string }).phase);
+    return PHASE_LABELS[phase] ?? phase;
+  }
+  return "正在处理";
+}
+
+function extractErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  return "请求中断，请稍后再试。";
+}
+
+function parseSseEvents(chunk: string, onEvent: (event: string, data: unknown) => void) {
+  const blocks = chunk.split(/\r?\n\r?\n/);
+  const rest = blocks.pop() ?? "";
+
+  for (const block of blocks) {
+    let event = "message";
+    const dataLines: string[] = [];
+
+    for (const line of block.split(/\r?\n/)) {
+      if (line.startsWith("event:")) event = line.slice(6).trim();
+      if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+    }
+
+    if (!dataLines.length) continue;
+
+    try {
+      onEvent(event, JSON.parse(dataLines.join("\n")));
+    } catch {
+      onEvent(event, dataLines.join("\n"));
+    }
+  }
+
+  return rest;
+}
 
 export function useChatStream(): UseChatStreamReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [slots, setSlots] = useState<SlotState>(EMPTY_SLOTS);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentPhase, setCurrentPhase] = useState('');
+  const [currentPhase, setCurrentPhase] = useState("");
   const abortRef = useRef<AbortController | null>(null);
 
-  /** 发送消息到 SSE API */
+  const updateAssistant = useCallback(
+    (messageId: string, updater: (message: ChatMessage) => ChatMessage) => {
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === messageId ? updater(message) : message
+        )
+      );
+    },
+    []
+  );
+
+  const handleEvent = useCallback(
+    (type: string, data: unknown, assistantId: string) => {
+      if (type === "phase") {
+        const phase = extractPhase(data);
+        setCurrentPhase(phase);
+        updateAssistant(assistantId, (message) => ({ ...message, phase }));
+        return;
+      }
+
+      if (type === "slot_check") {
+        const payload = data as { complete?: boolean; followUp?: string };
+        if (payload.followUp && payload.complete === false) {
+          updateAssistant(assistantId, (message) => ({
+            ...message,
+            phase: "等待补充信息",
+          }));
+        }
+        return;
+      }
+
+      if (type === "answer_delta") {
+        const delta = String((data as { delta?: string }).delta ?? "");
+        updateAssistant(assistantId, (message) => ({
+          ...message,
+          content: message.content + delta,
+        }));
+        return;
+      }
+
+      if (type === "answer_done") {
+        const full = (data as { full?: string }).full;
+        updateAssistant(assistantId, (message) => ({
+          ...message,
+          content: typeof full === "string" && full ? full : message.content,
+          streaming: false,
+          phase: "完成",
+        }));
+        return;
+      }
+
+      if (type === "sources") {
+        const sources = (data as { sources?: SourceItem[] }).sources ?? [];
+        updateAssistant(assistantId, (message) => ({
+          ...message,
+          sources,
+          streaming: false,
+        }));
+        return;
+      }
+
+      if (type === "warning") {
+        const warning = String((data as { message?: string }).message ?? "表达需要复核");
+        updateAssistant(assistantId, (message) => ({
+          ...message,
+          warnings: [...(message.warnings ?? []), warning],
+        }));
+        return;
+      }
+
+      if (type === "error") {
+        const message = String((data as { message?: string }).message ?? "服务暂时不可用");
+        setError(message);
+        updateAssistant(assistantId, (assistant) => ({
+          ...assistant,
+          content: assistant.content
+            ? `${assistant.content}\n\n错误：${message}`
+            : `错误：${message}`,
+          streaming: false,
+          phase: "失败",
+        }));
+      }
+    },
+    [updateAssistant]
+  );
+
   const sendMessage = useCallback(
-    async (text: string) => {
-      if (!text.trim() || isStreaming) return;
+    async (text: string, options: SendOptions) => {
+      const cleanText = text.trim();
+      if (!cleanText || isStreaming) return;
 
-      // 添加用户消息
-      const userMsg: ChatMessage = {
-        id: nextId(),
-        role: 'user',
-        content: text.trim(),
+      const userMessage: ChatMessage = {
+        id: uid("user"),
+        role: "user",
+        content: cleanText,
       };
-      // 添加空的 assistant 占位
-      const assistantMsg: ChatMessage = {
-        id: nextId(),
-        role: 'assistant',
-        content: '',
+      const assistantMessage: ChatMessage = {
+        id: uid("assistant"),
+        role: "assistant",
+        content: "",
+        phase: "排队处理",
         streaming: true,
-        phase: '',
       };
 
-      setMessages((prev) => [...prev, userMsg, assistantMsg]);
+      setMessages((current) => [...current, userMessage, assistantMessage]);
       setIsStreaming(true);
       setError(null);
-      setCurrentPhase('');
+      setCurrentPhase("排队处理");
 
       const abort = new AbortController();
       abortRef.current = abort;
 
       try {
-        // 构建 profile（把 slots 里已填的传递给后端）
-        const profile: Record<string, unknown> = {};
-        if (slots.province) profile.province = slots.province;
-        if (slots.score) profile.score = parseInt(slots.score, 10) || undefined;
-        if (slots.rank) profile.rank = parseInt(slots.rank, 10) || undefined;
-        if (slots.subjects) profile.subjects = slots.subjects;
-        if (slots.familyBackground) profile.familyBackground = slots.familyBackground;
-        if (slots.careerGoal) profile.careerGoal = slots.careerGoal;
-        if (slots.exclusions)
-          profile.exclusions = slots.exclusions.split(/[,，、]/).map((s) => s.trim());
-
-        const res = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text, profile }),
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: cleanText,
+            mode: options.mode,
+            profile: buildProfile(slots),
+          }),
           signal: abort.signal,
         });
 
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: '请求失败' }));
-          setError(err.error ?? '请求失败');
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantMsg.id
-                ? { ...m, content: `⚠ ${err.error ?? '请求失败'}`, streaming: false }
-                : m
-            )
-          );
-          setIsStreaming(false);
-          return;
+        if (!response.ok) {
+          const payload = await response
+            .json()
+            .catch(() => ({ error: "请求失败，请稍后重试。" }));
+          throw new Error(payload.error ?? "请求失败，请稍后重试。");
         }
 
-        // 解析 SSE 流
-        const reader = res.body?.getReader();
-        if (!reader) throw new Error('No response body');
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error("服务没有返回可读取的响应流。");
 
         const decoder = new TextDecoder();
-        let buffer = '';
+        let buffer = "";
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
           buffer += decoder.decode(value, { stream: true });
-          // 解析 SSE 事件
-          const lines = buffer.split('\n');
-          buffer = lines.pop() ?? ''; // 保留不完整的行
+          buffer = parseSseEvents(buffer, (event, data) => {
+            handleEvent(event, data, assistantMessage.id);
+          });
+        }
 
-          let eventType = '';
-          for (const line of lines) {
-            if (line.startsWith('event: ')) {
-              eventType = line.slice(7).trim();
-            } else if (line.startsWith('data: ')) {
-              const dataStr = line.slice(6);
-              if (!eventType) continue;
-              try {
-                const data = JSON.parse(dataStr);
-                handleEvent(eventType, data, assistantMsg.id);
-              } catch {
-                // 忽略解析失败的单条事件
-              }
-            }
-          }
+        if (buffer.trim()) {
+          parseSseEvents(`${buffer}\n\n`, (event, data) => {
+            handleEvent(event, data, assistantMessage.id);
+          });
         }
       } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
-          setError((err as Error).message);
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantMsg.id
-                ? { ...m, content: `⚠ 连接中断: ${(err as Error).message}`, streaming: false }
-                : m
-            )
-          );
+        if ((err as Error).name !== "AbortError") {
+          const message = extractErrorMessage(err);
+          setError(message);
+          updateAssistant(assistantMessage.id, (assistant) => ({
+            ...assistant,
+            content: assistant.content
+              ? `${assistant.content}\n\n连接中断：${message}`
+              : `连接中断：${message}`,
+            streaming: false,
+            phase: "失败",
+          }));
         }
       } finally {
         setIsStreaming(false);
-        setCurrentPhase('');
+        setCurrentPhase("");
         abortRef.current = null;
       }
     },
-    [isStreaming, slots]
+    [handleEvent, isStreaming, slots, updateAssistant]
   );
 
-  /** 处理单个 SSE 事件，更新消息状态 */
-  const handleEvent = useCallback(
-    (type: string, data: unknown, msgId: string) => {
-      switch (type) {
-        case 'phase':
-          setCurrentPhase(data as string);
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === msgId ? { ...m, phase: data as string } : m
-            )
-          );
-          break;
-
-        case 'slot_check': {
-          const d = data as { complete: boolean; followUp?: string };
-          // 如果槽位不全，后端已经返回了 followUp 文本
-          // 更新 assistant 消息的 content（会通过 answer_delta 追加）
-          break;
-        }
-
-        case 'answer_delta': {
-          const d = data as { delta: string };
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === msgId
-                ? { ...m, content: m.content + d.delta }
-                : m
-            )
-          );
-          break;
-        }
-
-        case 'answer_done': {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === msgId ? { ...m, streaming: false } : m
-            )
-          );
-          break;
-        }
-
-        case 'sources': {
-          const d = data as { sources: SourceItem[] };
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === msgId ? { ...m, sources: d.sources, streaming: false } : m
-            )
-          );
-          break;
-        }
-
-        case 'warning': {
-          // P5a：禁用词命中警告。将警告消息追加到 warnings 数组，
-          // 前端 MessageItem 渲染时显示红色警告条。
-          const d = data as { message: string };
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === msgId
-                ? { ...m, warnings: [...(m.warnings ?? []), d.message] }
-                : m
-            )
-          );
-          break;
-        }
-
-        case 'error': {
-          const d = data as { message: string };
-          setError(d.message);
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === msgId
-                ? {
-                    ...m,
-                    content: m.content + `\n\n⚠ 错误: ${d.message}`,
-                    streaming: false,
-                  }
-                : m
-            )
-          );
-          break;
-        }
-      }
-    },
-    []
-  );
-
-  /** 更新单个槽位值 */
   const updateSlot = useCallback((key: keyof SlotState, value: string) => {
-    setSlots((prev) => ({ ...prev, [key]: value }));
+    setSlots((current) => ({ ...current, [key]: value }));
   }, []);
 
-  /** 重置对话 */
+  const replaceMessages = useCallback((nextMessages: ChatMessage[]) => {
+    setMessages(nextMessages);
+    setError(null);
+    setCurrentPhase("");
+  }, []);
+
+  const stop = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setIsStreaming(false);
+    setCurrentPhase("");
+    setMessages((current) =>
+      current.map((message) =>
+        message.streaming ? { ...message, streaming: false, phase: "已停止" } : message
+      )
+    );
+  }, []);
+
   const reset = useCallback(() => {
-    if (abortRef.current) abortRef.current.abort();
+    stop();
     setMessages([]);
     setSlots(EMPTY_SLOTS);
-    setIsStreaming(false);
     setError(null);
-    setCurrentPhase('');
-  }, []);
+  }, [stop]);
 
-  return { messages, slots, isStreaming, error, currentPhase, sendMessage, updateSlot, reset };
+  return {
+    messages,
+    setMessages,
+    slots,
+    isStreaming,
+    error,
+    currentPhase,
+    sendMessage,
+    updateSlot,
+    replaceMessages,
+    reset,
+    stop,
+  };
 }
