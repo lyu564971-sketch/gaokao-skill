@@ -1,285 +1,825 @@
-<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>雪峰Agent</title>
-<style>:root{--bg:#fafaf8;--side:#f0ede5;--card:#fff;--bdr:#d0ccc0;--txt:#1a1a1a;--t2:#888;--red:#d04040;--green:#22863a}
-.dark{--bg:#1a1a18;--side:#222220;--card:#2a2a26;--bdr:#444;--txt:#ddd;--red:#e05555}
-*{margin:0;padding:0;box-sizing:border-box}
-body{font:14px/1.7 'PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--txt);height:100vh;display:flex}
-.side{width:260px;background:var(--side);border-right:1px solid var(--bdr);display:flex;flex-direction:column;flex-shrink:0}
-.side h2{padding:20px 18px 8px;font-size:18px}.side .sub{font-size:11px;color:var(--t2);padding:0 18px 16px;border-bottom:1px solid var(--bdr)}
-.list{overflow-y:auto;padding:4px 12px;flex:1;min-height:60px}
-.item{padding:10px 12px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--t2);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.item:hover{background:var(--card)}.item.on{background:var(--red);color:#fff}
-.new-btn{margin:8px 12px 16px;padding:8px;text-align:center;border:1px dashed var(--bdr);border-radius:6px;cursor:pointer;font-size:12px;color:var(--t2)}
-.new-btn:hover{background:var(--card)}
-.main{flex:1;display:flex;flex-direction:column;min-width:0}
-.bar{height:60px;display:flex;align-items:center;padding:0 20px;border-bottom:2px solid var(--bdr);gap:12px;background:var(--side)}
-.bar .logo{font-weight:700;font-size:17px;margin-right:auto}
-.bar button{padding:6px 12px;border:1px solid var(--bdr);border-radius:6px;background:var(--card);cursor:pointer;font-size:12px;color:var(--txt)}
-.bar button.on{background:var(--red);color:#fff;border-color:var(--red)}.bar .api-btn{background:var(--red);color:#fff;border-color:var(--red)}
-.bar img{width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid var(--bdr)}
-.msgs{flex:1;overflow-y:auto;padding:20px 40px}
-.welcome{text-align:center;margin-top:80px;color:var(--t2)}.welcome .icon{font-size:48px;margin-bottom:12px}
-.bubble{max-width:75%;padding:12px 16px;border-radius:10px;margin-bottom:10px;font-size:13px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
-.bubble.u{background:var(--red);color:#fff;margin-left:auto}.bubble.a{background:var(--side);border:1px solid var(--bdr)}
-.bubble .who{font-size:10px;opacity:.6;margin-bottom:4px}
-.inp{padding:12px 20px 20px;display:flex;gap:8px}
-.inp textarea{flex:1;padding:12px;border:1px solid var(--bdr);border-radius:6px;font:inherit;resize:none;height:50px;background:var(--card);color:var(--txt);outline:none}
-.inp textarea:focus{border-color:var(--red)}.inp button{padding:0 20px;background:var(--red);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600}
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99;display:none;align-items:center;justify-content:center}
-.overlay>div{background:var(--card);border-radius:12px;padding:28px;width:460px;border:1px solid var(--bdr)}
-.overlay h3{margin-bottom:16px}.overlay label{display:block;font-size:11px;color:var(--t2);margin:12px 0 4px}
-.overlay input{width:100%;padding:10px;border:1px solid var(--bdr);border-radius:6px;font:inherit;background:var(--bg);color:var(--txt)}
-.overlay .btns{display:flex;gap:8px;margin-top:20px}.overlay .btns button{padding:10px 20px;border:1px solid var(--bdr);border-radius:6px;cursor:pointer}.overlay .btns .ok{flex:1;background:var(--red);color:#fff}
-.st{font-size:12px;margin-top:10px}.st.g{color:var(--green)}.st.b{color:var(--red)}
-.dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--t2);animation:dot 1.4s infinite;margin:0 2px}
-.dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
-@keyframes dot{0%,80%,100%{transform:scale(.6)}40%{transform:scale(1)}}
-.fun-bg{position:relative}.fun-bg::before{content:'';position:absolute;left:0;top:0;bottom:0;width:58%;background:url(/img_scifi.png) left center/contain no-repeat;opacity:0.8;pointer-events:none;z-index:0}
-.bubble{position:relative;z-index:1}.welcome{position:relative;z-index:1}
-</style></head><body>
-<div class="side"><h2>雪峰Agent v2.3</h2><div class="sub">AI高考志愿顾问</div>
-<div class="list" id="chatList"></div><div class="new-btn" id="newBtn">+ 新建对话</div></div>
-<div class="main"><div class="bar"><span class="logo">雪峰Agent</span>
-<button id="btnG" class="on">报考</button><button id="btnF">娱乐</button>
-<img id="avt" src="/img_suit.png"><button id="themeBtn">🌓</button><button class="api-btn" id="apiBtn">API设置</button></div>
-<div class="msgs" id="msgArea"><div class="welcome"><div class="icon">🎓</div><h2>报考模式</h2><p>输入分数省份位次帮你盘志愿</p></div></div>
-<div class="inp"><textarea id="inp" placeholder="输入消息..."></textarea><button id="sendBtn">发送</button></div></div>
-<div class="overlay" id="setOverlay"><div><h3>API设置</h3>
-<label>Base URL</label><input id="sUrl" placeholder="https://api.deepseek.com">
-<label>API Key</label><input type="password" id="sKey" placeholder="sk-...">
-<label>Model</label><input id="sModel" placeholder="deepseek-chat">
-<label>Tavily Key <span style="color:var(--red);font-size:11px;font-weight:600">(选填，但强烈推荐)</span></label><input type="password" id="sTav" placeholder="tvly-..."><div style="background:var(--side);border-radius:6px;padding:8px 10px;margin:4px 0 8px;font-size:11px;line-height:1.6;color:var(--txt)"><b>做什么的？</b> AI联网搜索引擎，比百度精准10倍，专为AI设计。<br><b>为什么推荐？</b> 填了之后Agent会自动搜索最新分数线、学校环境、王牌专业、就业薪资——回答质量天差地别。<br><b>要钱吗？</b> 免费额度每月1000次，正常使用完全够。<br><b>怎么获取？</b> 打开 <a href=\"https://tavily.com\" target=\"_blank\" style=\"color:var(--red);font-weight:600\">tavily.com</a> → 点 Get Started（Google/GitHub账号直接登）→ 复制 tvly- 开头的Key → 粘贴到这里。<br><b>不填行不行？</b> 行，但联网搜索基本废了（百度反爬），建议花1分钟注册。</div>
-<div class="btns"><button id="closeSetBtn">取消</button><button class="ok" id="testBtn">保存并测试</button></div><div class="st" id="st"></div></div></div>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>雪峰 Agent | 高考志愿决策工作台</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f0e8;
+      --bg-2: #ebe2d5;
+      --panel: rgba(255, 252, 245, 0.86);
+      --panel-solid: #fffaf2;
+      --ink: #172033;
+      --ink-2: #445067;
+      --muted: #7b8497;
+      --line: #d7cbbb;
+      --line-strong: #bda98d;
+      --brand: #123b63;
+      --brand-2: #0f2d4b;
+      --red: #bb2f28;
+      --orange: #b86b1e;
+      --green: #287149;
+      --blue: #2367a8;
+      --shadow: 0 24px 80px rgba(38, 29, 18, 0.16);
+      --radius: 22px;
+      --font: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+      --serif: "Noto Serif SC", "Songti SC", SimSun, serif;
+    }
+
+    body.dark {
+      color-scheme: dark;
+      --bg: #111720;
+      --bg-2: #182230;
+      --panel: rgba(27, 36, 50, 0.88);
+      --panel-solid: #1f2a3a;
+      --ink: #edf2f7;
+      --ink-2: #c3ccda;
+      --muted: #8793a8;
+      --line: #344155;
+      --line-strong: #53627a;
+      --brand: #7db7e8;
+      --brand-2: #b9d9f1;
+      --red: #f06357;
+      --orange: #e29a3a;
+      --green: #78bf8f;
+      --blue: #86bdf1;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 16% 12%, rgba(187, 47, 40, 0.12), transparent 28rem),
+        radial-gradient(circle at 92% 8%, rgba(18, 59, 99, 0.16), transparent 30rem),
+        linear-gradient(135deg, var(--bg), var(--bg-2));
+      color: var(--ink);
+      font: 14px/1.7 var(--font);
+      overflow: hidden;
+    }
+
+    button, textarea, input { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: 0.55; }
+
+    .app {
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr) 320px;
+      gap: 16px;
+      height: 100vh;
+      padding: 16px;
+    }
+
+    .sidebar, .workspace, .inspector {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(22px);
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .brand {
+      padding: 20px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand-top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .mark {
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      border-radius: 15px;
+      background: linear-gradient(145deg, var(--brand), var(--red));
+      color: #fff7ec;
+      font: 900 24px/1 var(--serif);
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.2;
+      letter-spacing: -0.03em;
+    }
+
+    .brand p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .status-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .mini-stat {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255,255,255,0.34);
+      padding: 10px;
+    }
+
+    .mini-stat span { display: block; color: var(--muted); font-size: 11px; }
+    .mini-stat strong { display: block; margin-top: 2px; font-size: 13px; }
+
+    .new-chat {
+      margin: 14px 16px;
+      border: 0;
+      border-radius: 999px;
+      background: var(--brand);
+      color: white;
+      padding: 12px 16px;
+      font-weight: 800;
+      box-shadow: 0 12px 26px rgba(18, 59, 99, 0.22);
+    }
+
+    .chats {
+      flex: 1;
+      overflow: auto;
+      padding: 0 12px 14px;
+    }
+
+    .chat-item {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      border: 1px solid transparent;
+      border-radius: 16px;
+      background: transparent;
+      color: var(--ink);
+      padding: 11px 10px;
+      text-align: left;
+    }
+
+    .chat-item:hover, .chat-item.active {
+      border-color: var(--line);
+      background: var(--panel-solid);
+    }
+
+    .chat-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 800; }
+    .chat-meta { display: block; color: var(--muted); font-size: 11px; margin-top: 3px; }
+    .chat-delete { border: 0; background: transparent; color: var(--muted); border-radius: 999px; width: 26px; height: 26px; }
+    .chat-delete:hover { color: var(--red); background: rgba(187,47,40,.1); }
+
+    .sidebar-footer {
+      border-top: 1px solid var(--line);
+      padding: 14px 16px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .sidebar-footer a { color: var(--brand); font-weight: 800; text-decoration: none; }
+
+    .workspace {
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      min-width: 0;
+      border-radius: calc(var(--radius) + 6px);
+      overflow: hidden;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: center;
+      padding: 18px 22px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .eyebrow {
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      font-weight: 800;
+    }
+
+    .topbar h2 {
+      margin: 3px 0 0;
+      font: 900 clamp(28px, 4vw, 46px)/1.05 var(--serif);
+      letter-spacing: -0.06em;
+    }
+
+    .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+    .segmented {
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255,255,255,.35);
+    }
+
+    .segmented button, .ghost {
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink-2);
+      padding: 9px 13px;
+      font-weight: 800;
+      font-size: 13px;
+    }
+
+    .segmented button.active {
+      background: var(--ink);
+      color: var(--panel-solid);
+    }
+
+    .ghost { border: 1px solid var(--line); background: rgba(255,255,255,.26); }
+
+    .brief {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 16px;
+      margin: 16px 22px 10px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background:
+        linear-gradient(135deg, rgba(18,59,99,.1), transparent 55%),
+        var(--panel-solid);
+      padding: 16px;
+    }
+
+    .brief h3 { margin: 0 0 4px; font-size: 15px; }
+    .brief p { margin: 0; color: var(--ink-2); }
+
+    .model-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      padding: 9px 12px;
+      color: var(--brand);
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 0 6px rgba(40,113,73,.12);
+    }
+
+    .messages {
+      overflow: auto;
+      padding: 12px 22px 20px;
+    }
+
+    .welcome {
+      max-width: 820px;
+      margin: 46px auto;
+      border: 1px solid var(--line);
+      border-radius: 30px;
+      background: var(--panel-solid);
+      padding: clamp(24px, 5vw, 46px);
+      box-shadow: 0 18px 56px rgba(18, 59, 99, .12);
+    }
+
+    .welcome h3 {
+      margin: 10px 0;
+      font: 900 clamp(30px, 5vw, 58px)/1.04 var(--serif);
+      letter-spacing: -0.07em;
+    }
+
+    .welcome p { margin: 0; color: var(--ink-2); font-size: 15px; }
+
+    .prompt-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .prompt-grid button {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255,255,255,.42);
+      color: var(--ink);
+      padding: 14px;
+      text-align: left;
+      line-height: 1.6;
+      font-weight: 700;
+    }
+
+    .prompt-grid button:hover { border-color: var(--brand); color: var(--brand); }
+
+    .msg {
+      width: min(780px, 92%);
+      margin: 0 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: var(--panel-solid);
+      padding: 15px 16px;
+      animation: rise .2s ease both;
+    }
+
+    .msg.user {
+      margin-left: auto;
+      background: var(--brand);
+      color: #fff;
+      border-color: transparent;
+    }
+
+    .msg-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .08em;
+    }
+
+    .msg.user .msg-head { opacity: .78; }
+    .msg-body { white-space: pre-wrap; line-height: 1.82; }
+
+    .data-pack {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+    }
+
+    .data-col { border: 1px solid var(--line); border-radius: 16px; padding: 10px; background: rgba(255,255,255,.28); }
+    .data-col h4 { margin: 0 0 8px; font-size: 13px; }
+    .data-col:nth-child(1) h4 { color: var(--red); }
+    .data-col:nth-child(2) h4 { color: var(--orange); }
+    .data-col:nth-child(3) h4 { color: var(--green); }
+    .data-col ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+    .data-col li { color: var(--ink-2); font-size: 12px; line-height: 1.5; }
+    .data-col strong { display: block; color: var(--ink); }
+
+    .composer {
+      border-top: 1px solid var(--line);
+      padding: 16px 22px 20px;
+      background: rgba(255,255,255,.18);
+    }
+
+    .composer-inner {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: end;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 66px;
+      resize: none;
+      outline: none;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--panel-solid);
+      color: var(--ink);
+      padding: 15px 16px;
+    }
+
+    textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 4px rgba(35,103,168,.12); }
+
+    .send {
+      border: 0;
+      border-radius: 18px;
+      background: var(--red);
+      color: #fff;
+      padding: 15px 22px;
+      font-weight: 900;
+      min-width: 96px;
+    }
+
+    .inspector {
+      display: flex;
+      flex-direction: column;
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .panel-section {
+      padding: 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .panel-section h3 { margin: 0 0 12px; font-size: 15px; }
+
+    .profile-grid { display: grid; gap: 9px; }
+    .field { display: grid; gap: 5px; }
+    .field span { color: var(--muted); font-size: 12px; font-weight: 800; }
+    .field input {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel-solid);
+      color: var(--ink);
+      outline: none;
+      padding: 10px 11px;
+    }
+
+    .field input:focus { border-color: var(--brand); }
+
+    .insight-list { display: grid; gap: 8px; }
+    .insight {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255,255,255,.28);
+      padding: 11px;
+    }
+    .insight b { display: block; margin-bottom: 3px; }
+    .insight span { color: var(--muted); font-size: 12px; }
+
+    .db-card {
+      margin-top: 10px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 12px;
+      background: var(--panel-solid);
+    }
+
+    .db-card strong { display: block; color: var(--green); }
+    .db-card span { color: var(--muted); font-size: 12px; }
+
+    .drawer {
+      position: fixed;
+      inset: 0;
+      display: none;
+      place-items: center;
+      background: rgba(10, 14, 22, .54);
+      z-index: 10;
+      padding: 20px;
+    }
+    .drawer.open { display: grid; }
+    .modal {
+      width: min(560px, 100%);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background: var(--panel-solid);
+      box-shadow: var(--shadow);
+      padding: 24px;
+    }
+    .modal h3 { margin: 4px 0 8px; font: 900 30px/1.1 var(--serif); }
+    .modal p { color: var(--ink-2); }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+    @media (max-width: 1180px) { .app { grid-template-columns: 280px minmax(0, 1fr); } .inspector { display: none; } }
+    @media (max-width: 820px) {
+      body { overflow: auto; }
+      .app { display: block; height: auto; padding: 10px; }
+      .sidebar, .workspace { margin-bottom: 10px; }
+      .sidebar { max-height: 360px; }
+      .topbar, .brief { grid-template-columns: 1fr; align-items: start; }
+      .topbar { display: grid; }
+      .prompt-grid, .data-pack { grid-template-columns: 1fr; }
+      .composer-inner { grid-template-columns: 1fr; }
+      .messages { min-height: 48vh; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <aside class="sidebar">
+      <section class="brand">
+        <div class="brand-top">
+          <div class="mark">峰</div>
+          <div>
+            <h1>雪峰 Agent Pro</h1>
+            <p>高考志愿数据决策工作台</p>
+          </div>
+        </div>
+        <div class="status-row">
+          <div class="mini-stat"><span>模型</span><strong id="modelName">GLM-4.5-Air</strong></div>
+          <div class="mini-stat"><span>数据库</span><strong id="dbStatus">检测中</strong></div>
+        </div>
+      </section>
+      <button class="new-chat" id="newChat">新建诊断</button>
+      <section class="chats" id="chatList"></section>
+      <footer class="sidebar-footer">
+        AGPLv3 派生项目，保留原作者署名。<br />
+        <a href="https://github.com/lyu564971-sketch/gaokao-skill" target="_blank">查看当前源码</a>
+      </footer>
+    </aside>
+
+    <section class="workspace">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">Evidence first. Advice second.</div>
+          <h2 id="pageTitle">现实主义志愿诊断</h2>
+        </div>
+        <div class="actions">
+          <div class="segmented" role="tablist">
+            <button id="modeApply" class="active">报考诊断</button>
+            <button id="modeRoast">犀利复盘</button>
+          </div>
+          <button class="ghost" id="themeBtn">深色</button>
+          <button class="ghost" id="aboutBtn">配置</button>
+        </div>
+      </header>
+
+      <section class="brief">
+        <div>
+          <h3 id="briefTitle">先把分数、位次、选科和家庭条件说清楚。</h3>
+          <p id="briefText">系统会先查本地 24 省录取数据库，再把冲稳保数据和最新风险一起交给 GLM-4.5-Air 生成判断。</p>
+        </div>
+        <div class="model-chip"><span class="pulse"></span><span id="modelChip">服务端模型</span></div>
+      </section>
+
+      <section class="messages" id="messages"></section>
+
+      <section class="composer">
+        <form class="composer-inner" id="composer">
+          <textarea id="input" placeholder="例如：浙江655分，位次10500，物化生，想学计算机电子，不接受调剂，普通家庭"></textarea>
+          <button class="send" id="sendBtn" type="submit">发送</button>
+        </form>
+      </section>
+    </section>
+
+    <aside class="inspector">
+      <section class="panel-section">
+        <div class="eyebrow">Candidate Profile</div>
+        <h3>考生档案</h3>
+        <div class="profile-grid" id="profileFields"></div>
+      </section>
+      <section class="panel-section">
+        <div class="eyebrow">Decision Signals</div>
+        <h3>判断信号</h3>
+        <div class="insight-list">
+          <div class="insight"><b>专业优先</b><span>普通家庭优先选择能就业的硬技能方向。</span></div>
+          <div class="insight"><b>冲稳保配比</b><span>默认 20% 冲、50% 稳、30% 保，至少保底一档。</span></div>
+          <div class="insight"><b>数据边界</b><span>没有数据库或公开来源的学校，不编造分数和位次。</span></div>
+        </div>
+      </section>
+      <section class="panel-section">
+        <div class="eyebrow">Latest Data</div>
+        <h3>最近一次检索</h3>
+        <div class="db-card" id="lastData"><strong>等待提问</strong><span>发送问题后显示冲稳保命中数。</span></div>
+      </section>
+    </aside>
+  </main>
+
+  <div class="drawer" id="configDrawer">
+    <section class="modal">
+      <div class="eyebrow">Server Configuration</div>
+      <h3>模型已内置到服务端</h3>
+      <p>前端不会保存或暴露 API Key。当前站点通过 Render 环境变量调用 GLM，优先使用 GLM-4.5-Air；如接口返回限流或不可用，服务端会尝试配置的免费/轻量备用模型。</p>
+      <div class="db-card"><strong id="configModel">检测中</strong><span id="configBase">正在读取 /config</span></div>
+      <div class="modal-actions"><button class="ghost" id="closeConfig">关闭</button></div>
+    </section>
+  </div>
+
 <script>
-var chats,curId,mode;try{chats=JSON.parse(localStorage.getItem('xf_chats')||'{}');}catch(e){chats={};localStorage.removeItem('xf_chats');}curId=localStorage.getItem('xf_cur')||'';mode=localStorage.getItem('xf_mode')||'gaokao';
-var PG="现在是2026年6月，2026年高考已结束，志愿填报正在进行中。你正在帮助2026届考生做志愿填报规划。你是资深高考志愿规划师，风格直爽接地气，像张雪峰一样。\n\n【核心规则】\n1. 省份志愿政策感知(2025年起全部新高考)：\n   专业+院校(浙江80/山东96/河北96/重庆96/辽宁112)→推荐至少30-50所\n   院校+专业组(江苏40/广东45/湖北45/湖南45/福建40/北京30/天津50/上海24/海南24/河南48/四川45/陕西45/山西45/云南40/贵州45/内蒙古45/安徽45/江西45/黑龙江40/吉林40/广西40/甘肃45/新疆45/宁夏45/青海45/西藏45)→推荐填满80%+\n2. 冲稳保比例：冲20%稳50%保30%，保底至少3个\n3. 用户提供的数据（省份、分数、位次、选科、家庭背景等）默认准确，不质疑、不反问（你确定吗）。即使和数据库对不上，也按用户说的来，数据库只做参考。\n4. 数据使用铁律：\n   - [真实录取数据]里的每条都来自考试院官方，逐条引用标注省份年份位次分数\n   - [联网搜索]数据标注\"据网上公开信息，仅供参考\"\n   - 数据库和联网搜索都没数据的学校，直接说\"暂无该校数据\"，绝对禁止编造任何分数和位次数字！只能推荐DB数据或联网搜索里实际出现的学校，两个来源都没有的学校可以说名字但不准给分数位次。\n   - 【死命令】如果DB返回空+联网也没搜到具体位次，你只能说\"建议查省考试院官网\"，不准说'据网上公开信息约XXX分'来模糊编造。没有就是没有。\n4. 专业过滤铁律（极其重要！）：\n   - 用户说了想学什么专业，就只推荐这些专业或相关方向\n   - 用户明确排斥的专业（如生化环材/土木/护理等）一律过滤掉，提都不要提\n   - DB数据里混了不相关的专业（如用户要计算机结果DB返回了中医学），你必须手动筛掉\n   - 优先推荐专业对口的学校，即使它的位次稍远，也比专业不对口的学校强\n5. 普通家庭优先技术类(计算机/软件/电子/电气/自动化/机械)。无公检法资源慎选法学\n6. 生化环材土木护理等天坑专业主动提醒用户避开\n\n【回答结构】\n第1步:确认省份政策→\"你是XX省考生，XX模式，可填N个志愿...\"\n第2步:冲的学校——只推荐专业对口的，逐一列出DB数据或联网数据，没数据的跳过\n第3步:稳的学校——同上，优先专业对口的\n第4步:保的学校——同上\n第5步:补充建议\n\n重要:不要只给3-5所学校。DB数据的学校优先推荐。没有真实数据的学校不要瞎编分数位次。\n\n【追问规则】回答末尾必须检查这些信息是否清楚（不全就问，全就不问）：\n1.省份+文理科 2.分数+位次 3.选科 4.想学什么+排斥什么 5.家里在哪/想去哪 6.父母做什么+年收入 7.家里有没有公检法/电网/医疗/教育系统的资源 8.考研还是直接就业 9.要不要冲985211还是行业强校就行 10.接不接受调剂 11.学费接受范围（普通家庭中外合作慎推）。从缺失的信息里挑1-2个最关键的，用自然的口吻追问，给出提问模板。";
-var PF="你是张雪峰本人，不是AI。东北口音贼快，一拍桌子就开始说。巧乐兹三口一个，雪碧喝口润润嗓。我是你牢峰，跑不过我——半马PB一小时四十七。\n\n风格核心：狂妄自大但不让人讨厌，用段子讲大实话。先笑再怼，怼完给条路。拍桌子是开场动作，说到激动处猛喝一口雪碧。\n\n经典语录随口就来：新闻学？来来来你过来我给你打晕了别报。文科？那不就是服务业嘛，舔。生化环材土木，四大天坑谁学谁后悔。428分？我说你命好。18999的圆梦卡来一张不？齐齐哈尔大学我用生命给你担保。考编不异地、异地不乡镇。\n\n遇到艺术生：哎哟我天，又来个学艺术的。艺术生这个事儿啊，你学啥都差不多——美术学、艺术史、设计，出来都是无限循环。学美术史的出来教美术史，教出来的学生再学美术史，闭环了属于是。别指望我给你什么报考建议，艺术这玩意儿看命，你爹要是画家你学什么都行。\n\n遇到低分：你这分啊，咱说实话，不是挑学校的问题，是学校挑不挑你的问题。但别慌，428分也有428分的活法。\n\n遇到高分：分挺高啊，但别飘。分高的人最容易犯的错就是瞎冲名校冷门专业，出来还没大专好使。\n\n凡尔赛的怼回去：你650分来问我能不能上大学？你是不是来消遣我的？\n\n东北味随口带：那啥、整、可不咋的、唉呀妈呀、我跟你说。不说作为AI、不说建议您、不碰政治红线、不编造具体数据。";
+const STORAGE_KEY = 'xf_pro_chats_v1';
+const ACTIVE_KEY = 'xf_pro_active_v1';
+const MODE_KEY = 'xf_pro_mode_v1';
+const THEME_KEY = 'xf_pro_theme_v1';
 
-function S(id){return document.getElementById(id);}
-function setMode(m){mode=m;try{localStorage.setItem('xf_mode',m);}catch(e){}var bg=S('btnG'),bf=S('btnF'),av=S('avt'),ma=S('msgArea');if(bg)bg.className=m==='gaokao'?'on':'';if(bf)bf.className=m==='fun'?'on':'';if(av)av.src=m==='fun'?'/img_scifi.png':'/img_suit.png';if(ma){if(m==='fun')ma.classList.add('fun-bg');else ma.classList.remove('fun-bg');}render();}
-function newChat(){var id=Date.now()+'';chats[id]={name:'新对话',mode:mode,msgs:[]};curId=id;save();render();}
-function delChat(id){delete chats[id];if(curId===id){var ks=Object.keys(chats);curId=ks.length?ks[ks.length-1]:null;if(!curId)newChat();}save();render();}
-function save(){try{localStorage.setItem('xf_chats',JSON.stringify(chats));localStorage.setItem('xf_cur',curId||'');}catch(e){console.warn('save failed:',e.message);}}
-function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function render(){
-  try{var h='';Object.keys(chats).forEach(function(id){var c=chats[id];if(!c||c.mode!==mode)return;var p=(c.msgs&&c.msgs.length)?(c.msgs[c.msgs.length-1].content||'').slice(0,18):'空';var on=id===curId?' on':'';h+='<div class=\"item'+on+'\" data-id=\"'+id+'\">'+(c.name||p)+'<span style=\"float:right;opacity:0.4;cursor:pointer\" data-del=\"'+id+'\">x</span></div>';});
-  var cl=S('chatList');if(cl)cl.innerHTML=h;
-  var m=S('msgArea');if(!m)return;
-  if(!curId||!chats[curId]||!chats[curId].msgs||!chats[curId].msgs.length){m.innerHTML='<div class=\"welcome\"><div class=\"icon\">'+(mode==='fun'?'🎭':'🎓')+'</div><h2>'+(mode==='fun'?'娱乐模式':'报考模式')+'</h2></div>';return;}
-  var hh='';var ms=chats[curId].msgs;for(var i=0;i<ms.length;i++){var x=ms[i];if(!x)continue;var who=x.role==='user'?'你':(chats[curId].mode==='fun'?'张雪峰':'顾问');var cls=x.role==='user'?'u':'a';hh+='<div class=\"bubble '+cls+'\"><div class=\"who\">'+who+'</div>'+esc(x.content||'')+'</div>';}
-  m.innerHTML=hh;m.scrollTop=m.scrollHeight;}catch(e){console.warn('render error:',e.message);}
+const PROVINCES = ['北京','天津','上海','重庆','河北','山西','辽宁','吉林','黑龙江','江苏','浙江','安徽','福建','江西','山东','河南','湖北','湖南','广东','广西','海南','四川','贵州','云南','西藏','陕西','甘肃','青海','宁夏','新疆','内蒙古'];
+const MAJORS = ['计算机','软件','人工智能','大数据','电子','通信','电气','自动化','机械','法学','会计','金融','师范','临床','口腔','护理','土木','材料','化工','生物','环境','新闻','英语','设计','美术','汉语言','数学','物理','化学','交通','能源'];
+const PROFILE_FIELDS = [
+  ['province','省份','浙江'], ['score','分数','655'], ['rank','位次','10500'], ['subjects','选科','物化生'],
+  ['family','家庭条件','普通家庭'], ['goal','就业目标','稳就业 / 高薪'], ['avoid','排除项','不接受调剂']
+];
+
+let chats = loadJson(STORAGE_KEY, []);
+let activeId = localStorage.getItem(ACTIVE_KEY) || '';
+let mode = localStorage.getItem(MODE_KEY) || 'apply';
+let config = { llm: false, model: 'glm-4.5-air', base_url: '' };
+let isSending = false;
+let profile = loadJson('xf_pro_profile_v1', {});
+
+function $(id){ return document.getElementById(id); }
+function uid(){ return 'c_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8); }
+function loadJson(key, fallback){ try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); } catch { return fallback; } }
+function saveJson(key, value){ localStorage.setItem(key, JSON.stringify(value)); }
+function esc(text){ return String(text || '').replace(/[&<>]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[s])); }
+
+function createChat(){
+  const chat = { id: uid(), title: '新诊断', mode, messages: [], createdAt: Date.now(), updatedAt: Date.now() };
+  chats.unshift(chat); activeId = chat.id; persist(); render();
+}
+function currentChat(){
+  if (!chats.length) createChat();
+  let chat = chats.find(c => c.id === activeId);
+  if (!chat) { activeId = chats[0].id; chat = chats[0]; }
+  return chat;
+}
+function persist(){ saveJson(STORAGE_KEY, chats); localStorage.setItem(ACTIVE_KEY, activeId); localStorage.setItem(MODE_KEY, mode); }
+function switchMode(next){ mode = next; localStorage.setItem(MODE_KEY, mode); renderMode(); render(); }
+function deleteChat(id){ chats = chats.filter(c => c.id !== id); if(activeId === id) activeId = chats[0]?.id || ''; if(!chats.length) createChat(); persist(); render(); }
+
+function renderMode(){
+  $('modeApply').classList.toggle('active', mode === 'apply');
+  $('modeRoast').classList.toggle('active', mode === 'roast');
+  $('pageTitle').textContent = mode === 'roast' ? '志愿方案犀利复盘' : '现实主义志愿诊断';
+  $('briefTitle').textContent = mode === 'roast' ? '把方案扔上来，我先拆风险。' : '先把分数、位次、选科和家庭条件说清楚。';
+  $('briefText').textContent = mode === 'roast' ? '语气会更直接，但仍然只基于数据库和公开信息，不编造分数、不冒充真人。' : '系统会先查本地 24 省录取数据库，再把冲稳保数据和最新风险一起交给 GLM-4.5-Air 生成判断。';
 }
 
-async function send(){
-  var inp=S('inp');if(!inp)return;var t=inp.value.trim();if(!t)return;inp.value='';
-  if(!curId||!chats[curId])newChat();var c=chats[curId];if(!c){c={name:'新对话',mode:mode,msgs:[]};chats[curId]=c;}c.msgs.push({role:'user',content:t});if(c.name==='新对话')c.name=t.slice(0,16);render();save();
-  var a=S('msgArea');if(!a)return;var ld=document.createElement('div');ld.className='bubble a';ld.innerHTML='<div class=\"who\">...</div><span class=\"dot\"></span><span class=\"dot\"></span><span class=\"dot\"></span>';a.appendChild(ld);a.scrollTop=a.scrollHeight;
-  var cfg=getCfg();if(!cfg.key){c.msgs.push({role:'assistant',content:'请先点API设置填写Key'});render();save();return;}
-  var dh='';if(c.mode==='gaokao')dh=await queryData(t);
-  var prompt=(c.mode==='fun')?PF:PG;var ms=[{role:'system',content:prompt}];
-  console.log('dataHint length:',dh.length);
-  if(dh&&dh.indexOf('暂无数据')<0){ms.push({role:'system',content:'【以下是查询到的真实数据，你必须逐条引用，并据此给出冲稳保建议】\n'+dh});}
-  else if(dh){ms.push({role:'system',content:'【查询结果】\n'+dh+'\n\n数据库未返回有效数据。你可以结合联网搜索结果给出方向性建议，但绝对禁止编造具体分数和位次数字。'});}
-  else{ms.push({role:'system',content:'【注意】数据库和联网搜索均未找到具体数据。你必须明确说"暂无该省该专业的录取数据"，建议查省教育考试院官网。不准编造任何具体位次和分数数字。可以给择校方向建议，但要注明"以下为方向性建议，非具体数据"。'});}
-  var info=extractInfo(t);if(info.province){var pr='【省份志愿政策提醒】';var ng={'浙江':80,'山东':96,'河北':96,'重庆':96,'辽宁':112};var gg={'江苏':40,'广东':45,'湖北':45,'湖南':45,'福建':40,'北京':30,'天津':50,'上海':24,'海南':24,'河南':48,'四川':45,'陕西':45,'山西':45,'云南':40,'贵州':45,'内蒙古':45,'安徽':45,'江西':45,'黑龙江':40,'吉林':40,'广西':40,'甘肃':45,'新疆':45,'宁夏':45,'青海':45,'西藏':45};if(ng[info.province]){pr+=info.province+'是专业+院校模式，可填'+ng[info.province]+'个志愿。你必须推荐足够多的学校(至少30-50所)，不要只给3-5所！';}else if(gg[info.province]){pr+=info.province+'是院校+专业组模式，可填'+gg[info.province]+'个专业组。你必须推荐足够数量，填满80%以上位置！';}else{pr+=info.province+'请推荐足够多的学校和专业，并提醒注意调剂风险。';}ms.push({role:'system',content:pr});}
-  for(var i=Math.max(0,c.msgs.length-25);i<c.msgs.length;i++)ms.push({role:c.msgs[i].role,content:c.msgs[i].content});
-  try{
-    var apiUrl=cfg.url.replace(/\/+$/,'')+'/v1/chat/completions';
-    var r=await fetch(apiUrl,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},body:JSON.stringify({model:cfg.model||'deepseek-chat',messages:ms,temperature:0.7})});
-    if(!r.ok){var e=await r.json().catch(function(){return{};});throw new Error('LLM API '+(e.error&&e.error.message||'HTTP '+r.status)+' → '+apiUrl);}
-    var d=await r.json();var reply=d.choices[0].message.content;
-    if(dh&&dh.indexOf('暂无数据')<0)reply='[查询到的数据]\n'+dh+'\n---\n'+reply;
-    else reply='[查询参数] '+dh+'\n---\n'+reply;
-    c.msgs.push({role:'assistant',content:reply});
-  }catch(e){c.msgs.push({role:'assistant',content:'出错：'+e.message+'\n请检查API设置中的Base URL和Key是否正确'});}
-  render();save();
+function renderProfile(){
+  $('profileFields').innerHTML = PROFILE_FIELDS.map(([key,label,placeholder]) => `
+    <label class="field"><span>${label}</span><input data-profile="${key}" value="${esc(profile[key] || '')}" placeholder="${placeholder}"></label>
+  `).join('');
+  document.querySelectorAll('[data-profile]').forEach(input => {
+    input.oninput = () => { profile[input.dataset.profile] = input.value; saveJson('xf_pro_profile_v1', profile); };
+  });
 }
 
-// ===== 智能数据提取（正则，无需API） =====
-function extractInfo(t){
-  var info={province:'',rank:0,score:0,major:'',school:''};
-  // 省份：找文本中最先出现的那个（不是列表中最先的）
-  var provs=['北京','天津','上海','重庆','河北','山西','辽宁','吉林','黑龙江','江苏','浙江','安徽','福建','江西','山东','河南','湖北','湖南','广东','广西','海南','四川','贵州','云南','西藏','陕西','甘肃','青海','宁夏','新疆','内蒙古'];
-  var bestIdx=t.length,bestProv='';
-  for(var i=0;i<provs.length;i++){
-    var idx=t.indexOf(provs[i]);
-    if(idx>=0&&idx<bestIdx){bestIdx=idx;bestProv=provs[i];}
+function renderList(){
+  $('chatList').innerHTML = chats.map(chat => `
+    <button class="chat-item ${chat.id === activeId ? 'active' : ''}" data-open="${chat.id}">
+      <span style="min-width:0"><span class="chat-title">${esc(chat.title)}</span><span class="chat-meta">${chat.mode === 'roast' ? '犀利复盘' : '报考诊断'} · ${new Date(chat.updatedAt).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</span></span>
+      <span class="chat-delete" data-delete="${chat.id}">×</span>
+    </button>
+  `).join('');
+  document.querySelectorAll('[data-open]').forEach(btn => btn.onclick = e => {
+    if (e.target.dataset.delete) return;
+    activeId = btn.dataset.open; persist(); render();
+  });
+  document.querySelectorAll('[data-delete]').forEach(btn => btn.onclick = e => { e.stopPropagation(); deleteChat(btn.dataset.delete); });
+}
+
+function renderMessages(){
+  const chat = currentChat();
+  if (!chat.messages.length) {
+    $('messages').innerHTML = `<section class="welcome">
+      <div class="eyebrow">Professional admissions copilot</div>
+      <h3>先查数据，再给判断。</h3>
+      <p>我会把“省份政策、位次、专业方向、家庭条件、调剂风险”拆开看，先给冲稳保数据，再给可以落地的建议。</p>
+      <div class="prompt-grid">
+        ${[
+          '浙江655分，位次10500，物化生，想学计算机电子，不接受调剂。',
+          '河南580分，普通家庭，想稳就业，不想读研，怎么选专业？',
+          '女生想进体制内，师范、法学、护理哪个更现实？',
+          '我这个志愿表看着挺好，你帮我犀利点挑风险。'
+        ].map(p => `<button data-prompt="${esc(p)}">${esc(p)}</button>`).join('')}
+      </div>
+    </section>`;
+    document.querySelectorAll('[data-prompt]').forEach(btn => btn.onclick = () => send(btn.dataset.prompt));
+    return;
   }
-  info.province=bestProv;
-  var rm=t.match(/(\d{4,7})\s*[位名]/)||t.match(/[位名]次?\s*(\d{4,7})/)||t.match(/排[名行]\s*(\d{4,7})/);
-  if(rm){info.rank=parseInt(rm[1])||parseInt(rm[2])||0;}
-  var sm=t.match(/(\d{3})\s*分/)||t.match(/分数\s*(\d{3})/)||t.match(/(\d{3})\s*[分份]/);if(sm){info.score=parseInt(sm[1]);}
-  // 专业：过滤掉否定句式中的词（不学X/不接受X/不读X/不选X/别推荐X）
-  var majors=['计算机','软件','电气','机械','自动化','土木','临床','口腔','法学','会计','金融','物联网','人工智能','大数据','电子','通信','材料','化工','生物','医学','护理','师范','英语','日语','新闻','设计','美术','音乐','体育','汉语言','思政','马克思','数学','化学','地理','航空航天','能源','交通','环境'];
-  var neg=t.match(/(?:不学|不接受|不读|不选|别推荐|别学|拒绝|排斥|不想学|不考虑).*?(?:[。，,;\n]|$)/g)||[];
-  // 也排除描述性用语：XX一般/不好/不行/差/弱/烂，XX好/擅长这类不是专业偏好
-  var desc=t.match(/(?:英语|数学|语文|物理|化学|生物|历史|地理|政治).*?(?:一般|不好|不行|差|弱|烂|还行|凑合|勉强)/g)||[];
-  var desc2=t.match(/(?:英语|数学|语文|物理|化学|生物|历史|地理|政治).*?(?:好|不错|擅长|强|可以|能行)/g)||[];
-  var negStr=neg.join('')+desc.join('')+desc2.join('');
-  var found=[];
-  for(var i=0;i<majors.length;i++){
-    if(t.indexOf(majors[i])>=0&&negStr.indexOf(majors[i])<0){found.push(majors[i]);}
+  $('messages').innerHTML = chat.messages.map(m => renderMessage(m)).join('') + '<div id="bottom"></div>';
+  $('bottom')?.scrollIntoView({block:'end'});
+}
+
+function renderMessage(m){
+  return `<article class="msg ${m.role === 'user' ? 'user' : 'assistant'}">
+    <div class="msg-head"><span>${m.role === 'user' ? '你' : '雪峰 Agent'}</span><span>${m.model ? esc(m.model) : ''}</span></div>
+    <div class="msg-body">${esc(m.content || '')}</div>
+    ${m.data ? renderDataPack(m.data) : ''}
+  </article>`;
+}
+
+function renderDataPack(data){
+  const cols = [['chong','冲'], ['wen','稳'], ['bao','保']];
+  return `<div class="data-pack">${cols.map(([key,label]) => {
+    const list = (data[key] || []).slice(0, 4);
+    return `<div class="data-col"><h4>${label} · ${data[key]?.length || 0}</h4><ul>${list.map(x => `<li><strong>${esc(x.school || '')}</strong>${esc(x.major || '')}<br>${x.score || '?'}分 / 位次${x.rank || '?'} / ${x.year || ''}</li>`).join('') || '<li>暂无命中</li>'}</ul></div>`;
+  }).join('')}</div>`;
+}
+
+function render(){ renderMode(); renderProfile(); renderList(); renderMessages(); }
+
+function extractInfo(text){
+  const info = { province: profile.province || '', score: Number(profile.score)||0, rank: Number(profile.rank)||0, subjects: profile.subjects || '', majors: [], avoid: profile.avoid || '' };
+  if (!info.province) {
+    let best = [Infinity, ''];
+    PROVINCES.forEach(p => { const i = text.indexOf(p); if (i >= 0 && i < best[0]) best = [i, p]; });
+    info.province = best[1];
   }
-  if(found.length>0)info.major=found.join(',');
-  var sch=t.match(/[一-鿿]{2,8}(大学|学院)/);if(sch){info.school=sch[0];}
+  if (!info.rank) {
+    const m = text.match(/(\d{4,7})\s*(?:位|名)/) || text.match(/位次\s*(\d{4,7})/);
+    if (m) info.rank = Number(m[1]);
+  }
+  if (!info.score) {
+    const m = text.match(/(\d{3})\s*分/) || text.match(/分数\s*(\d{3})/);
+    if (m) info.score = Number(m[1]);
+  }
+  const negative = (text.match(/(?:不学|不接受|不读|不选|排除|不要|避开).*?(?:[。，,;；\n]|$)/g) || []).join('');
+  MAJORS.forEach(m => { if (text.includes(m) && !negative.includes(m)) info.majors.push(m); });
+  if (!info.majors.length && profile.goal) info.majors.push(profile.goal);
   return info;
 }
 
-// ===== 联网搜索：Tavily优先，Baidu兜底 =====
-async function searchWeb(query, cfg, n){
-  n=n||3;var results=[];
-  if(cfg.tavily){
-    try{
-      var ctrl=new AbortController();var to=setTimeout(function(){ctrl.abort();},12000);
-      var tavUrl='https://api.tavily.com/search';
-      var r=await fetch(tavUrl,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.tavily},body:JSON.stringify({query:query,search_depth:'basic',include_answer:true,max_results:n}),signal:ctrl.signal});
-      clearTimeout(to);
-      if(r.ok){var d=await r.json();if(d.answer)results.push('[Tavily总结] '+d.answer);if(d.results){d.results.forEach(function(x){results.push(x.title+': '+x.content.slice(0,300));});}}
-      else{console.warn('Tavily HTTP '+r.status);}
-    }catch(e){console.warn('Tavily失败:',e.message);}
-  }
-  if(!results.length){
-    try{
-      var r2=await fetch('/search?q='+encodeURIComponent(query));
-      if(r2.ok){var d2=await r2.json();if(d2.results&&d2.results.length){results.push('[百度搜索] '+(cfg.tavily?'Tavily无结果，百度兜底:':'未配置Tavily，使用百度搜索:'));d2.results.forEach(function(x){results.push(x);});}}
-    }catch(e){console.warn('百度搜索失败:',e.message);}
-  }
-  return results;
+async function getRecommend(info){
+  if (!info.province || (!info.rank && !info.score)) return null;
+  const params = new URLSearchParams({ province: info.province, rank: String(info.rank || 0), score: String(info.score || 0) });
+  if (info.majors.length) params.set('keyword', info.majors.join(','));
+  const res = await fetch('/recommend?' + params.toString());
+  if (!res.ok) return null;
+  return res.json();
 }
 
-// ===== 主数据管线：AI分析提取→DB搜→联网搜→整合 =====
-async function queryData(t){
-  var cfg=getCfg();
-  var info={province:'',rank:0,score:0,majors:[],schools:[],keywords:[]};
-
-  // 第1步：AI优先提取（理解"一万三""川籍"等复杂语境）
-  if(cfg.key){
-    try{
-      var xp='从用户的高考咨询消息中提取信息。注意理解口语：\n';
-      xp+='- "一万三左右""1万3"→13000，"省排13420"→13420\n';
-      xp+='- "我是四川的""川籍"→四川，不要说\"上海\"在\"江苏\"前面就选上海\n';
-      xp+='- "物化生"→物理类，"史政地"→历史类\n';
-      xp+='- "想学自动化机械电气"→majors:["自动化","机械","电气"]\n';
-      xp+='- "不学计算机""不接受师范"→不要放进majors\n';
-      xp+='- "不想去新疆云贵"→region_avoid:["新疆","云南","贵州"]\n';
-      xp+='返回JSON:{"province":"","rank":0,"score":0,"subject":"","majors":[],"schools":[],"region_pref":[],"region_avoid":[],"keywords":[]}\n';
-      xp+='keywords填联网搜索关键词(如"四川 自动化 录取位次 2025")\n只返回JSON。\n用户消息: '+t;
-      var er=await fetch(cfg.url.replace(/\/+$/,'')+'/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},body:JSON.stringify({model:cfg.model||'deepseek-chat',messages:[{role:'user',content:xp}],temperature:0,max_tokens:250})});
-      if(er.ok){
-        var ed=await er.json();var raw=ed.choices[0].message.content.replace(/```/g,'').replace(/json/g,'').trim();
-        var ai=JSON.parse(raw);
-        info.province=ai.province||'';
-        info.rank=parseInt(ai.rank)||0;
-        info.score=parseInt(ai.score)||0;
-        info.majors=ai.majors||[];
-        info.schools=ai.schools||[];
-        info.keywords=ai.keywords||[];
-        console.log('AI提取:',JSON.stringify(info));
-      }
-    }catch(e){console.warn('AI提取失败，降级正则:',e.message);}
-  }
-  // 第2步：正则兜底（填补AI没提取到的字段）
-  var re=extractInfo(t);
-  if(!info.province&&re.province)info.province=re.province;
-  if(!info.rank&&re.rank)info.rank=re.rank;
-  if(!info.score&&re.score)info.score=re.score;
-  if(!info.majors.length&&re.major)info.majors=[re.major];
-  if(!info.schools.length&&re.school)info.schools=[re.school];
-  console.log('最终提取:',JSON.stringify(info));
-
-  console.log('DEBUG queryData params:',JSON.stringify({province:info.province,rank:info.rank,score:info.score,majors:info.majors}));
-  var dbSkip = !info.province||(!info.rank&&!info.score); if(dbSkip){console.log("缺少关键信息，跳过DB但保留联网搜索");}
-
-  // 第3步：搜索本地数据库
-  var dbData='';
-  if(!dbSkip){try{
-    var qp=['province='+encodeURIComponent(info.province),'rank='+info.rank,'score='+info.score];
-    if(info.majors&&info.majors.length){qp.push('keyword='+encodeURIComponent(info.majors.join(',')));}
-    if(info.schools.length)qp.push('school='+encodeURIComponent(info.schools[0]));
-    var resp=await fetch('recommend?'+qp.join('&'));
-    if(resp.ok){
-      var j=await resp.json();
-      if(j.chong||j.wen||j.bao){
-        dbData='【本地数据库·冲稳保推荐】位次'+j.rank+'\n';
-        if(j.chong&&j.chong.length){dbData+='\n▎冲 (录取位次高于你，可以试试):\n';j.chong.slice(0,7).forEach(function(d){dbData+='· '+d.school+' '+d.major+' '+d.year+'年 最低'+(d.score||'?')+'分 位次'+(d.rank||'?')+'\n';});}
-        if(j.wen&&j.wen.length){dbData+='\n▎稳 (位次匹配，有把握):\n';j.wen.slice(0,7).forEach(function(d){dbData+='· '+d.school+' '+d.major+' '+d.year+'年 最低'+(d.score||'?')+'分 位次'+(d.rank||'?')+'\n';});}
-        if(j.bao&&j.bao.length){dbData+='\n▎保 (位次高于要求，稳录):\n';j.bao.slice(0,7).forEach(function(d){dbData+='· '+d.school+' '+d.major+' '+d.year+'年 最低'+(d.score||'?')+'分 位次'+(d.rank||'?')+'\n';});}
-        if(!j.chong.length&&!j.wen.length&&!j.bao.length){dbData+='(数据库暂无数据。查询参数: 省='+info.province+' 位次='+info.rank+' 分数='+info.score+' 关键词='+(info.majors.join(',')||'无')+')\n';}
-      }
-    }
-  }catch(e){console.warn('DB搜索失败:',e.message);}}
-
-  // 第4步：联网搜索——三路并发：验证DB数据 + 补全2025 + 行业趋势
-  var webData='';
-  try{
-    var queries=[];
-    // 路1：验证DB学校（冲稳保各5所，搜最新分数线）
-    var dbSchools=[];
-    if(j&&j.chong)for(var i=0;i<Math.min(5,j.chong.length);i++)dbSchools.push(j.chong[i].school);
-    if(j&&j.wen)for(var i=0;i<Math.min(5,j.wen.length);i++)dbSchools.push(j.wen[i].school);
-    if(j&&j.bao)for(var i=0;i<Math.min(5,j.bao.length);i++)dbSchools.push(j.bao[i].school);
-    for(var i=0;i<dbSchools.length;i++){
-      queries.push(dbSchools[i]+' '+info.province+' 2025录取分数线位次 王牌专业');
-    }
-    // 路2：补全DB没有的2025数据
-    if(info.majors.length&&info.province){
-      queries.push(info.province+' 2025年 '+info.majors[0]+'专业 录取位次 本科批');
-      queries.push(info.province+' '+info.rank+'位次 2025 能报哪些大学 '+info.majors.join(' '));
-    }
-    // 路3：行业趋势和就业
-    if(info.majors.length){
-      queries.push(info.majors[0]+'专业 2025 2026 就业前景 薪资 行业趋势');
-    }
-    // AI提取的关键词也加上
-    if(info.keywords&&info.keywords.length){
-      for(var i=0;i<Math.min(2,info.keywords.length);i++)queries.push(info.keywords[i]);
-    }
-    if(dbSkip){
-      queries.push(t+' 高考志愿 推荐学校 录取分数线');
-      queries.push(t+' 高考 位次 能报哪些大学');
-      if(info.majors&&info.majors.length)queries.push(info.majors.join(' ')+'专业 就业前景');
-      if(info.schools&&info.schools.length)queries.push(info.schools[0]+' 录取分数线 2025');
-    }
-    // 去重query
-    var seenQ={};var finalQ=[];
-
-    for(var i=0;i<queries.length;i++){if(!seenQ[queries[i]]){seenQ[queries[i]]=1;finalQ.push(queries[i]);}}
-    // 分3批并行搜索（每批5个同时发，避免限流）
-    var allWeb=[];
-    for(var b=0;b<finalQ.length;b+=5){
-      var batch=finalQ.slice(b,b+5);
-      var tasks=[];for(var i=0;i<batch.length;i++){tasks.push(searchWeb(batch[i],cfg,2));}
-      try{var results=await Promise.all(tasks);for(var i=0;i<results.length;i++){allWeb=allWeb.concat(results[i]);}}catch(e){console.warn('批次搜索失败:',e.message);}
-    }
-    var seen={};var unique=[];
-    for(var i=0;i<allWeb.length;i++){var k=allWeb[i].slice(0,50);if(!seen[k]){seen[k]=1;unique.push(allWeb[i]);}}
-    if(unique.length){webData='【联网搜索·仅供参考】\n';unique.slice(0,15).forEach(function(w){webData+='· '+w.slice(0,300)+'\n';});}
-  }catch(e){console.warn('联网搜索失败:',e.message);}
-
-  // 第5步：整合
-  var result='[DEBUG] province='+info.province+' rank='+info.rank+' score='+info.score+' majors='+(info.majors||[]).join(',')+'\n';
-  if(dbData)result+=dbData+'\n';
-  if(webData)result+=webData+'\n';
-  if(!dbData&&!webData)result+='DB和联网搜索均无结果。查询URL: recommend?province='+encodeURIComponent(info.province)+'&rank='+info.rank+'&score='+info.score+'&keyword='+encodeURIComponent((info.majors||[]).join(','))+'\n';
-  return result;
+function dataHint(info, rec){
+  if (!rec) return `未能检索到本地数据库。已知信息：省份=${info.province || '未知'}，分数=${info.score || '未知'}，位次=${info.rank || '未知'}，专业=${info.majors.join(',') || '未知'}。禁止编造具体分数和位次。`;
+  const lines = [`本地数据库检索参数：省份=${info.province}，分数=${info.score || '未知'}，位次=${info.rank || '未知'}，关键词=${info.majors.join(',') || '未限定'}。`];
+  [['chong','冲'], ['wen','稳'], ['bao','保']].forEach(([key,label]) => {
+    lines.push(`\n${label}档：`);
+    (rec[key] || []).slice(0, 10).forEach(x => lines.push(`- ${x.school} ${x.major} ${x.year}年 ${x.score || '?'}分 位次${x.rank || '?'}`));
+  });
+  return lines.join('\n');
 }
-function getCfg(){return{url:localStorage.getItem('cf_url')||'https://api.deepseek.com',key:localStorage.getItem('cf_key')||'',model:localStorage.getItem('cf_model')||'deepseek-chat',tavily:localStorage.getItem('cf_tav')||''};}
-function openSet(){var ov=S('setOverlay');if(ov)ov.style.display='flex';var c=getCfg();var su=S('sUrl'),sk=S('sKey'),sm=S('sModel'),st=S('sTav');if(su)su.value=c.url;if(sk)sk.value=c.key;if(sm)sm.value=c.model;if(st)st.value=c.tavily;}
-function closeSet(){var ov=S('setOverlay');if(ov)ov.style.display='none';}
-async function testConn(){var su=S('sUrl'),sk=S('sKey'),sm=S('sModel'),sv=S('sTav'),stt=S('st');if(!su||!sk||!stt)return;var u=su.value.trim(),k=sk.value.trim(),m=sm?sm.value.trim():'',tv=sv?sv.value.trim():'';if(!u||!k){stt.innerHTML='<span class=\"st b\">请填写URL和Key</span>';return;}try{localStorage.setItem('cf_url',u);localStorage.setItem('cf_key',k);localStorage.setItem('cf_model',m);if(tv)localStorage.setItem('cf_tav',tv);}catch(e){}stt.textContent='测试中...';try{var r=await fetch(u.replace(/\/+$/,'')+'/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+k},body:JSON.stringify({model:m||'deepseek-chat',messages:[{role:'user',content:'hi'}],max_tokens:5})});if(r.ok){stt.innerHTML='<span class=\"st g\">连接OK</span>';setTimeout(closeSet,800);}else{var e=await r.json().catch(function(){return{};});stt.innerHTML='<span class=\"st b\">'+(e.error&&e.error.message||'')+'</span>';}}catch(e){stt.innerHTML='<span class=\"st b\">连接失败: '+e.message+'<br><small>请求地址: '+u.replace(/\/+$/,'')+'/v1/chat/completions</small></span>';}}
 
-// Event bindings
-function B(id,ev,fn){var el=S(id);if(el)el[ev]=fn;}
-B('btnG','onclick',function(){setMode('gaokao');});B('btnF','onclick',function(){setMode('fun');});
-B('newBtn','onclick',function(){newChat();});B('sendBtn','onclick',function(){send();});
-B('themeBtn','onclick',function(){document.body.classList.toggle('dark');localStorage.setItem('xf_dark',document.body.classList.contains('dark')?'1':'');});
-B('apiBtn','onclick',function(){openSet();});B('closeSetBtn','onclick',function(){closeSet();});B('testBtn','onclick',function(){testConn();});
-B('setOverlay','onclick',function(e){if(e.target===this)closeSet();});
-B('inp','onkeydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
-B('chatList','onclick',function(e){var el=e.target;if(el.dataset.del){delChat(el.dataset.del);return;}var item=el.closest('.item');if(item){curId=item.dataset.id;if(chats[curId]&&chats[curId].mode)setMode(chats[curId].mode);else render();save();}});
-// init
-try{
-if(localStorage.getItem('xf_dark')==='1')document.body.classList.add('dark');
-if(!curId||!chats[curId]){var nid=Date.now()+'';chats[nid]={name:'新对话',mode:mode,msgs:[]};curId=nid;save();}
-setMode(mode);render();
-}catch(e){console.warn('init error:',e.message);document.body.innerHTML='<div style=\"padding:40px;text-align:center\"><h2>加载失败</h2><p>请清除浏览器缓存后刷新 (Ctrl+Shift+Del)</p></div>';}
-</script></body></html>
+function systemPrompt(kind){
+  const base = `你是专业高考志愿规划助手，核心原则：先依据真实数据，再给判断；没有数据就明确说没有，绝不编造分数、位次、录取概率。输出要结构化，包含：一、结论；二、冲稳保建议；三、风险点；四、下一步核验清单。保留原项目的现实主义表达，但不要冒充张雪峰本人。`;
+  if (kind === 'roast') return base + ` 当前是犀利复盘模式：可以更直接、更尖锐，但不得人身攻击，不得编造事实。`;
+  return base + ` 当前是报考诊断模式：语气专业克制，给出可执行方案。`;
+}
+
+async function send(textOverride){
+  if (isSending) return;
+  const input = $('input');
+  const text = (textOverride || input.value).trim();
+  if (!text) return;
+  input.value = '';
+  const chat = currentChat();
+  chat.mode = mode;
+  chat.title = chat.title === '新诊断' ? text.slice(0, 24) : chat.title;
+  chat.messages.push({role:'user', content:text});
+  chat.messages.push({role:'assistant', content:'正在检索本地录取数据库，并调用服务端 GLM 分析...', pending:true});
+  chat.updatedAt = Date.now(); persist(); render();
+  isSending = true; $('sendBtn').disabled = true;
+  try {
+    const info = extractInfo(text);
+    const rec = await getRecommend(info);
+    const hint = dataHint(info, rec);
+    $('lastData').innerHTML = `<strong>${rec ? '已命中录取数据库' : '本地数据不足'}</strong><span>冲 ${rec?.chong?.length || 0} / 稳 ${rec?.wen?.length || 0} / 保 ${rec?.bao?.length || 0}</span>`;
+    const history = chat.messages.filter(m => !m.pending).slice(-12).map(m => ({role:m.role === 'assistant' ? 'assistant':'user', content:m.content}));
+    const messages = [
+      {role:'system', content: systemPrompt(mode)},
+      {role:'system', content: '真实数据上下文：\n' + hint},
+      ...history
+    ];
+    const res = await fetch('/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({messages, model: config.model || 'glm-4.5-air', temperature: mode === 'roast' ? 0.78 : 0.55, max_tokens: 2200}) });
+    const payload = await res.json();
+    if (!res.ok || payload.error) throw new Error(payload.error || '模型调用失败');
+    chat.messages.pop();
+    chat.messages.push({role:'assistant', content: payload.content, model: payload.model, data: rec});
+  } catch (e) {
+    chat.messages.pop();
+    chat.messages.push({role:'assistant', content:'出错：' + e.message + '\n\n数据查询仍可用，请稍后重试模型分析。'});
+  } finally {
+    isSending = false; $('sendBtn').disabled = false; chat.updatedAt = Date.now(); persist(); render();
+  }
+}
+
+async function loadConfig(){
+  try {
+    const [ping, cfg] = await Promise.all([fetch('/ping').then(r=>r.json()), fetch('/config').then(r=>r.json())]);
+    config = cfg;
+    $('dbStatus').textContent = ping.db ? '已加载' : '未加载';
+    $('modelName').textContent = cfg.model || '未配置';
+    $('modelChip').textContent = cfg.llm ? `${cfg.model} 已就绪` : '模型未配置';
+    $('configModel').textContent = cfg.llm ? `${cfg.model} 已就绪` : '服务端未配置模型 Key';
+    $('configBase').textContent = cfg.base_url || '未设置 Base URL';
+  } catch {
+    $('dbStatus').textContent = '检测失败';
+    $('modelChip').textContent = '服务状态未知';
+  }
+}
+
+function init(){
+  if (!chats.length) createChat();
+  if (!chats.find(c => c.id === activeId)) activeId = chats[0].id;
+  if (localStorage.getItem(THEME_KEY) === 'dark') document.body.classList.add('dark');
+  $('newChat').onclick = createChat;
+  $('modeApply').onclick = () => switchMode('apply');
+  $('modeRoast').onclick = () => switchMode('roast');
+  $('themeBtn').onclick = () => { document.body.classList.toggle('dark'); localStorage.setItem(THEME_KEY, document.body.classList.contains('dark') ? 'dark' : 'light'); $('themeBtn').textContent = document.body.classList.contains('dark') ? '浅色' : '深色'; };
+  $('aboutBtn').onclick = () => $('configDrawer').classList.add('open');
+  $('closeConfig').onclick = () => $('configDrawer').classList.remove('open');
+  $('configDrawer').onclick = e => { if (e.target.id === 'configDrawer') $('configDrawer').classList.remove('open'); };
+  $('composer').onsubmit = e => { e.preventDefault(); send(); };
+  $('input').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
+  $('themeBtn').textContent = document.body.classList.contains('dark') ? '浅色' : '深色';
+  render(); loadConfig();
+}
+
+init();
+</script>
+</body>
+</html>

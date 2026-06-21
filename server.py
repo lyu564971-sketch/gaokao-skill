@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """雪峰Agent — 单文件服务器：HTML UI + API + 数据库查询"""
-import os, re, json, sqlite3, gzip, shutil, urllib.request, urllib.parse
+import os, re, json, sqlite3, gzip, shutil, urllib.request, urllib.parse, urllib.error
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -12,6 +12,11 @@ if not os.path.exists(DB_PATH) and os.path.exists(GZ_PATH):
             shutil.copyfileobj(gz, f)
 
 HAS_DB = os.path.exists(DB_PATH)
+
+DEFAULT_MODEL = os.environ.get('GLM_MODEL') or os.environ.get('LLM_MODEL') or 'glm-4.5-air'
+FALLBACK_MODELS = [m.strip() for m in os.environ.get('GLM_FALLBACK_MODELS', 'glm-4.5-flash,glm-4-flash').split(',') if m.strip()]
+LLM_BASE_URL = (os.environ.get('GLM_BASE_URL') or os.environ.get('LLM_BASE_URL') or 'https://open.bigmodel.cn/api/paas/v4').rstrip('/')
+LLM_API_KEY = os.environ.get('GLM_API_KEY') or os.environ.get('LLM_API_KEY') or ''
 
 PROVINCES = ['北京','天津','上海','重庆','河北','山西','辽宁','吉林','黑龙江','江苏','浙江','安徽',
              '福建','江西','山东','河南','湖北','湖南','广东','广西','海南','四川','贵州','云南',
@@ -30,6 +35,44 @@ def query_db(province=None, school=None, major=None, limit=50):
     rows = conn.execute(sql, params).fetchall()
     conn.close()
     return [{'province':r[0],'year':r[1],'school_name':r[2],'major_name':r[3],'score':r[4],'rank':r[5]} for r in rows]
+
+def call_llm(messages, model=None, temperature=0.7, max_tokens=1800):
+    if not LLM_API_KEY:
+        raise RuntimeError('Server GLM API key is not configured')
+    candidates = []
+    for name in [model or DEFAULT_MODEL, DEFAULT_MODEL, *FALLBACK_MODELS]:
+        if name and name not in candidates:
+            candidates.append(name)
+    last_error = None
+    for name in candidates:
+        payload = {
+            'model': name,
+            'messages': messages,
+            'temperature': temperature,
+            'max_tokens': max_tokens,
+        }
+        req = urllib.request.Request(
+            LLM_BASE_URL + '/chat/completions',
+            data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
+            headers={
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + LLM_API_KEY,
+            },
+            method='POST',
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=90) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+            content = data.get('choices', [{}])[0].get('message', {}).get('content', '')
+            if not content:
+                raise RuntimeError('Empty model response')
+            return {'content': content, 'model': name, 'raw': data}
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode('utf-8', errors='ignore')[:500]
+            last_error = RuntimeError(f'{name} HTTP {e.code}: {detail}')
+        except Exception as e:
+            last_error = e
+    raise RuntimeError(str(last_error) if last_error else 'Model request failed')
 
 def web_search(query, n=5):
     """百度搜索兜底 — 当 Tavily 不可用时使用"""
@@ -74,13 +117,35 @@ class Handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header('Access-Control-Allow-Origin','*')
-        self.send_header('Access-Control-Allow-Methods','GET,OPTIONS')
+        self.send_header('Access-Control-Allow-Methods','GET,POST,OPTIONS')
         self.send_header('Access-Control-Allow-Headers','*')
         self.end_headers()
 
+    def do_POST(self):
+        if self.path.startswith('/chat'):
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+                raw = self.rfile.read(length).decode('utf-8') if length else '{}'
+                body = json.loads(raw)
+                messages = body.get('messages') or []
+                if not isinstance(messages, list) or not messages:
+                    return self._send({'error': 'messages is required'}, 400)
+                result = call_llm(
+                    messages,
+                    model=body.get('model'),
+                    temperature=float(body.get('temperature', 0.7)),
+                    max_tokens=int(body.get('max_tokens', 1800)),
+                )
+                return self._send({'content': result['content'], 'model': result['model']})
+            except Exception as e:
+                return self._send({'error': str(e)}, 500)
+        return self._send({'error': 'not found'}, 404)
+
     def do_GET(self):
         if self.path == '/ping':
-            return self._send({'ok':True,'db':HAS_DB})
+            return self._send({'ok':True,'db':HAS_DB,'model':DEFAULT_MODEL,'llm':bool(LLM_API_KEY)})
+        if self.path == '/config':
+            return self._send({'llm':bool(LLM_API_KEY),'model':DEFAULT_MODEL,'base_url':LLM_BASE_URL})
         if self.path.startswith('/query'):
             qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             rows = query_db(qs.get('province',[''])[0], qs.get('school',[''])[0], qs.get('major',[''])[0])
@@ -191,7 +256,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
         msg = format%args if args else format
-        if '/recommend' in msg or '/query' in msg or '/ping' in msg or '/search' in msg:
+        if '/recommend' in msg or '/query' in msg or '/ping' in msg or '/search' in msg or '/chat' in msg:
             print(f"[REQ] {msg}")
 
 
