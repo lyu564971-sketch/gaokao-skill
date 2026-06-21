@@ -442,6 +442,13 @@
 
     .field input:focus { border-color: var(--brand); }
 
+    .panel-note {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.65;
+    }
+
     .insight-list { display: grid; gap: 8px; }
     .insight {
       border: 1px solid var(--line);
@@ -543,7 +550,7 @@
 
       <section class="brief">
         <div>
-          <h3 id="briefTitle">先把分数、位次、选科和家庭条件说清楚。</h3>
+          <h3 id="briefTitle">先把分数、位次、选科和专业方向说清楚。</h3>
           <p id="briefText">系统会先查本地 24 省录取数据库，再把冲稳保数据和最新风险一起交给 GLM-4.5-Air 生成判断。</p>
         </div>
         <div class="model-chip"><span class="pulse"></span><span id="modelChip">服务端模型</span></div>
@@ -553,7 +560,7 @@
 
       <section class="composer">
         <form class="composer-inner" id="composer">
-          <textarea id="input" placeholder="例如：浙江655分，位次10500，物化生，想学计算机电子，不接受调剂，普通家庭"></textarea>
+          <textarea id="input" placeholder="例如：浙江655分，位次10500，物化生，想学计算机电子，先帮我做初筛"></textarea>
           <button class="send" id="sendBtn" type="submit">发送</button>
         </form>
       </section>
@@ -569,7 +576,7 @@
         <div class="eyebrow">Decision Signals</div>
         <h3>判断信号</h3>
         <div class="insight-list">
-          <div class="insight"><b>专业优先</b><span>普通家庭优先选择能就业的硬技能方向。</span></div>
+          <div class="insight"><b>专业优先</b><span>先确认分数、位次、选科和兴趣方向，再追问家庭承受力与就业偏好。</span></div>
           <div class="insight"><b>冲稳保配比</b><span>默认 20% 冲、50% 稳、30% 保，至少保底一档。</span></div>
           <div class="insight"><b>数据边界</b><span>没有数据库或公开来源的学校，不编造分数和位次。</span></div>
         </div>
@@ -601,8 +608,7 @@ const THEME_KEY = 'xf_pro_theme_v1';
 const PROVINCES = ['北京','天津','上海','重庆','河北','山西','辽宁','吉林','黑龙江','江苏','浙江','安徽','福建','江西','山东','河南','湖北','湖南','广东','广西','海南','四川','贵州','云南','西藏','陕西','甘肃','青海','宁夏','新疆','内蒙古'];
 const MAJORS = ['计算机','软件','人工智能','大数据','电子','通信','电气','自动化','机械','法学','会计','金融','师范','临床','口腔','护理','土木','材料','化工','生物','环境','新闻','英语','设计','美术','汉语言','数学','物理','化学','交通','能源'];
 const PROFILE_FIELDS = [
-  ['province','省份','浙江'], ['score','分数','655'], ['rank','位次','10500'], ['subjects','选科','物化生'],
-  ['family','家庭条件','普通家庭'], ['goal','就业目标','稳就业 / 高薪'], ['avoid','排除项','不接受调剂']
+  ['province','省份','浙江'], ['score','分数','655'], ['rank','位次','10500'], ['subjects','选科','物化生']
 ];
 
 let chats = loadJson(STORAGE_KEY, []);
@@ -636,14 +642,14 @@ function renderMode(){
   $('modeApply').classList.toggle('active', mode === 'apply');
   $('modeRoast').classList.toggle('active', mode === 'roast');
   $('pageTitle').textContent = mode === 'roast' ? '志愿方案犀利复盘' : '现实主义志愿诊断';
-  $('briefTitle').textContent = mode === 'roast' ? '把方案扔上来，我先拆风险。' : '先把分数、位次、选科和家庭条件说清楚。';
+  $('briefTitle').textContent = mode === 'roast' ? '把方案扔上来，我先拆风险。' : '先把分数、位次、选科和专业方向说清楚。';
   $('briefText').textContent = mode === 'roast' ? '语气会更直接，但仍然只基于数据库和公开信息，不编造分数、不冒充真人。' : '系统会先查本地 24 省录取数据库，再把冲稳保数据和最新风险一起交给 GLM-4.5-Air 生成判断。';
 }
 
 function renderProfile(){
   $('profileFields').innerHTML = PROFILE_FIELDS.map(([key,label,placeholder]) => `
     <label class="field"><span>${label}</span><input data-profile="${key}" value="${esc(profile[key] || '')}" placeholder="${placeholder}"></label>
-  `).join('');
+  `).join('') + '<p class="panel-note">其他偏好不预设，会在对话里继续问清楚。</p>';
   document.querySelectorAll('[data-profile]').forEach(input => {
     input.oninput = () => { profile[input.dataset.profile] = input.value; saveJson('xf_pro_profile_v1', profile); };
   });
@@ -669,12 +675,12 @@ function renderMessages(){
     $('messages').innerHTML = `<section class="welcome">
       <div class="eyebrow">Professional admissions copilot</div>
       <h3>先查数据，再给判断。</h3>
-      <p>我会把“省份政策、位次、专业方向、家庭条件、调剂风险”拆开看，先给冲稳保数据，再给可以落地的建议。</p>
+      <p>我会先拆清省份政策、位次、专业方向和风险边界；信息不够时先追问，再给可以落地的建议。</p>
       <div class="prompt-grid">
         ${[
-          '浙江655分，位次10500，物化生，想学计算机电子，不接受调剂。',
-          '河南580分，普通家庭，想稳就业，不想读研，怎么选专业？',
-          '女生想进体制内，师范、法学、护理哪个更现实？',
+          '浙江655分，位次10500，物化生，想学计算机电子，先帮我做初筛。',
+          '河南580分，物化地，专业方向还不确定，怎么开始筛？',
+          '师范、法学、护理这几个方向，哪个更适合普通分段稳妥规划？',
           '我这个志愿表看着挺好，你帮我犀利点挑风险。'
         ].map(p => `<button data-prompt="${esc(p)}">${esc(p)}</button>`).join('')}
       </div>
@@ -705,7 +711,7 @@ function renderDataPack(data){
 function render(){ renderMode(); renderProfile(); renderList(); renderMessages(); }
 
 function extractInfo(text){
-  const info = { province: profile.province || '', score: Number(profile.score)||0, rank: Number(profile.rank)||0, subjects: profile.subjects || '', majors: [], avoid: profile.avoid || '' };
+  const info = { province: profile.province || '', score: Number(profile.score)||0, rank: Number(profile.rank)||0, subjects: profile.subjects || '', majors: [] };
   if (!info.province) {
     let best = [Infinity, ''];
     PROVINCES.forEach(p => { const i = text.indexOf(p); if (i >= 0 && i < best[0]) best = [i, p]; });
@@ -721,7 +727,6 @@ function extractInfo(text){
   }
   const negative = (text.match(/(?:不学|不接受|不读|不选|排除|不要|避开).*?(?:[。，,;；\n]|$)/g) || []).join('');
   MAJORS.forEach(m => { if (text.includes(m) && !negative.includes(m)) info.majors.push(m); });
-  if (!info.majors.length && profile.goal) info.majors.push(profile.goal);
   return info;
 }
 
@@ -745,7 +750,7 @@ function dataHint(info, rec){
 }
 
 function systemPrompt(kind){
-  const base = `你是专业高考志愿规划助手，核心原则：先依据真实数据，再给判断；没有数据就明确说没有，绝不编造分数、位次、录取概率。输出要结构化，包含：一、结论；二、冲稳保建议；三、风险点；四、下一步核验清单。保留原项目的现实主义表达，但不要冒充张雪峰本人。`;
+  const base = `你是专业高考志愿规划助手，核心原则：先依据真实数据，再给判断；没有数据就明确说没有，绝不编造分数、位次、录取概率。不要替用户默认家庭条件、就业目标、调剂/排除项；这些未明确时，先在问询阶段用简短问题补齐。输出要结构化，包含：一、结论；二、冲稳保建议；三、风险点；四、下一步核验清单。保留原项目的现实主义表达，但不要冒充张雪峰本人。`;
   if (kind === 'roast') return base + ` 当前是犀利复盘模式：可以更直接、更尖锐，但不得人身攻击，不得编造事实。`;
   return base + ` 当前是报考诊断模式：语气专业克制，给出可执行方案。`;
 }
